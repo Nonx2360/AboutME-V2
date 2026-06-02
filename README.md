@@ -1,73 +1,70 @@
-# React + TypeScript + Vite
+# 🌐 AboutME-V2 (Discord Live Status Portfolio)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A premium, modern, and highly interactive developer portfolio featuring a live Discord presence/status integration. Built with state-of-the-art web technologies for ultimate performance and fluid animations.
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## 🚀 Tech Stack
 
-## React Compiler
+Here is the modern stack powering this web application:
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+*   **Core Framework**: [React 19](https://react.dev/) — High performance, ultra-fast UI rendering with the latest React features.
+*   **Build Tool**: [Vite 8](https://vite.dev/) — Next-generation frontend tooling for lightning-fast development, Hot Module Replacement (HMR), and optimized production builds.
+*   **Language**: [TypeScript](https://www.typescriptlang.org/) — Strictly-typed JavaScript for reliable, robust, and clean code development.
+*   **Styling**: [Tailwind CSS v4](https://tailwindcss.com/) — Utility-first styling framework with first-class support for modern CSS features and seamless theme support.
+*   **Animations**: [Framer Motion](https://www.framer.com/motion/) — Industry-standard library for fluid, physics-based UI transitions and elegant interactive animations.
+*   **Icons**: [Lucide React](https://lucide.dev/) — A beautiful, consistent, and customizable icon library for React applications.
+*   **Routing**: [React Router DOM](https://reactrouter.com/) — Client-side routing for seamless page transitions.
 
-## Expanding the ESLint configuration
+---
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## 🛠️ Getting Started
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+Follow these steps to run the application locally on your machine.
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+### Prerequisites
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+Ensure you have [Node.js](https://nodejs.org/) (v18+) and [npm](https://www.npmjs.com/) installed.
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+### Installation
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+1.  **Clone the Repository**
+    ```bash
+    git clone https://github.com/your-username/AboutME-V2.git
+    cd AboutME-V2
+    ```
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+2.  **Install Dependencies**
+    ```bash
+    npm install
+    ```
+
+### Available Scripts
+
+In the project directory, you can run:
+
+*   `npm run dev` — Runs the app in the development mode at `http://localhost:5173`.
+*   `npm run build` — Builds the production bundle to the `dist` folder.
+*   `npm run lint` — Lints the codebase with ESLint.
+*   `npm run preview` — Previews the production-ready build locally.
+
+---
+
+## 📁 Project Structure
+
+```text
+AboutME-V2/
+├── public/              # Static assets (favicons, etc.)
+├── src/
+│   ├── assets/          # Static media assets, images, etc.
+│   ├── components/      # Reusable UI component blocks (e.g. AboutMe, SharedComponents)
+│   ├── hooks/           # Custom React hooks (e.g. Discord status polling/websockets)
+│   ├── pages/           # Page components
+│   ├── App.tsx          # Main App entry and layout structure
+│   ├── index.css        # Tailwind v4 configuration and global CSS variables
+│   └── main.tsx         # Root react mounting point
+├── eslint.config.js     # Code quality and linting settings
+├── package.json         # Project manifests and package versions
+├── tsconfig.json        # TypeScript configuration files
+└── vite.config.ts       # Vite bundler configurations
 ```
