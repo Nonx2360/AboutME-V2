@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Gamepad2, Monitor } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 const formatTime = (ms: number) => {
   const seconds = Math.floor((ms / 1000) % 60);
@@ -45,9 +46,12 @@ export const SpotifyInner = ({ spotify }: { spotify: any }) => {
 
         <div className="mt-4">
           <div className="h-1 bg-white/10 rounded-full overflow-hidden relative">
-            <div
-              className="absolute top-0 left-0 h-full transition-[width] duration-1000 ease-linear"
-              style={{ width: `${progress}%`, background: '#1db954' }}
+            <motion.div
+              className="absolute top-0 left-0 h-full rounded-full"
+              style={{ background: '#1db954' }}
+              initial={{ width: '0%' }}
+              animate={{ width: `${progress}%` }}
+              transition={{ duration: 1.5, ease: 'easeOut' }}
             />
           </div>
           <div className="flex justify-between mt-2">
