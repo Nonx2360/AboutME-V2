@@ -1,7 +1,8 @@
 import { useLanyard } from '../hooks/useLanyard';
 import { Music, Gamepad2, Mail, ArrowRight, Code2, X, Menu } from 'lucide-react';
 import { motion, AnimatePresence, useMotionValue, useSpring } from 'framer-motion';
-import { SpotifyInner, ActivityInner } from './SharedComponents';
+import { SpotifyLyricsCard } from './SpotifyLyricsCard';
+import { ActivityInner } from './SharedComponents';
 import { useRef, useState, useEffect } from 'react';
 
 /* ─── Magnetic ─────────────────────────────────────────────────────────── */
@@ -169,7 +170,7 @@ export const AboutMe = ({ userId }: { userId: string }) => {
   if (!data) return null;
 
   const { activities, spotify } = data;
-  const filteredActivities = activities.filter((a: any) => a.type !== 4 && a.name !== 'Spotify');
+  const filteredActivities = activities.filter((a) => a.type !== 4 && a.name !== 'Spotify');
 
   return (
     <div className="relative min-h-screen bg-black overflow-x-hidden">
@@ -320,26 +321,12 @@ export const AboutMe = ({ userId }: { userId: string }) => {
               initial={{ opacity: 0, scale: 0.95 }}
               whileInView={{ opacity: 1, scale: 1 }}
               viewport={{ once: true }}
-              className="status-card p-8 rounded-3xl relative overflow-hidden group min-h-[200px]"
+              className="status-card p-8 rounded-3xl relative overflow-hidden group min-h-[200px] flex flex-col justify-between"
             >
-              <div className="absolute top-0 right-0 p-6 text-white/5 group-hover:text-accent/20 transition-colors">
+              <div className="absolute top-0 right-0 p-6 text-white/5 group-hover:text-accent/20 transition-colors pointer-events-none">
                 <Music size={64} strokeWidth={1} />
               </div>
-              <div className="relative z-10">
-                <div className="flex items-center gap-4 mb-10">
-                  <div className="w-2 h-2 bg-[#1db954] rounded-full animate-ping" />
-                  <span className="text-[10px] font-black uppercase tracking-widest text-white/30">Listening Now</span>
-                </div>
-                <AnimatePresence mode="wait">
-                  {spotify ? (
-                    <motion.div key="spotify" initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }}>
-                      <SpotifyInner spotify={spotify} />
-                    </motion.div>
-                  ) : (
-                    <div className="text-lg font-serif italic text-white/10 py-8 text-center">No music playing...</div>
-                  )}
-                </AnimatePresence>
-              </div>
+              <SpotifyLyricsCard lanyardSpotify={spotify} />
             </motion.div>
 
             {/* Activity */}
@@ -361,7 +348,7 @@ export const AboutMe = ({ userId }: { userId: string }) => {
                 </div>
                 <div className="space-y-6">
                   {filteredActivities.length > 0 ? (
-                    filteredActivities.map((activity: any, idx: number) => (
+                    filteredActivities.map((activity, idx) => (
                       <ActivityInner key={idx} activity={activity} />
                     ))
                   ) : (

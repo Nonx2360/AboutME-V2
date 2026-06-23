@@ -20,7 +20,7 @@ export const OverlayView = () => {
   if (!data) return null;
 
   const { spotify, activities } = data;
-  const filteredActivities = activities.filter((a: any) => a.type !== 4 && a.name !== 'Spotify');
+  const filteredActivities = activities.filter((a) => a.type !== 4 && a.name !== 'Spotify');
 
   return (
     <div className="overlay-container">
@@ -45,7 +45,7 @@ export const OverlayView = () => {
                 </div>
                 Playing / Coding
              </div>
-             {filteredActivities.map((activity: any, idx: number) => (
+             {filteredActivities.map((activity, idx) => (
                 <ActivityInner key={idx} activity={activity} />
              ))}
           </div>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Gamepad2, Monitor } from 'lucide-react';
 import { motion } from 'framer-motion';
+import type { LanyardData } from '../hooks/useLanyard';
 
 const formatTime = (ms: number) => {
   const seconds = Math.floor((ms / 1000) % 60);
@@ -13,7 +14,7 @@ const formatTime = (ms: number) => {
   return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 };
 
-export const SpotifyInner = ({ spotify }: { spotify: any }) => {
+export const SpotifyInner = ({ spotify }: { spotify: NonNullable<LanyardData['spotify']> }) => {
   const [progress, setProgress] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const { start, end } = spotify.timestamps;
@@ -64,15 +65,16 @@ export const SpotifyInner = ({ spotify }: { spotify: any }) => {
   );
 };
 
-export const ActivityInner = ({ activity }: { activity: any }) => {
+export const ActivityInner = ({ activity }: { activity: LanyardData['activities'][number] }) => {
   const isGame = activity.type === 0;
   const [elapsed, setElapsed] = useState('');
 
   useEffect(() => {
-    if (!activity.timestamps?.start) return;
+    const startTime = activity.timestamps?.start;
+    if (!startTime) return;
     const update = () => {
       const now = Date.now();
-      const diff = now - activity.timestamps.start;
+      const diff = now - startTime;
       setElapsed(formatTime(diff));
     };
     update();
@@ -85,7 +87,7 @@ export const ActivityInner = ({ activity }: { activity: any }) => {
       {activity.assets?.large_image ? (
         <img
           src={activity.assets.large_image.startsWith('mp:external')
-            ? activity.assets.large_image.replace(/mp:external\/([^\/]*)\/(http[s]?)\//, '$2://')
+            ? activity.assets.large_image.replace(/mp:external\/([^/]*)\/(http[s]?)\//, '$2://')
             : `https://cdn.discordapp.com/app-assets/${activity.application_id}/${activity.assets.large_image}.png`
           }
           alt={activity.name}

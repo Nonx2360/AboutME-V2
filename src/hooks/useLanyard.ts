@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 
 export interface LanyardData {
   heartbeat_interval: number;
@@ -51,52 +51,53 @@ const LANYARD_WS = 'wss://api.lanyard.rest/socket';
 export const useLanyard = (userId: string) => {
   const [data, setData] = useState<LanyardData | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
-  const heartbeatRef = useRef<any>(null);
-
-  const connect = useCallback(() => {
-    const socket = new WebSocket(LANYARD_WS);
-    socketRef.current = socket;
-
-    socket.onopen = () => {
-      console.log('Lanyard WebSocket connected');
-    };
-
-    socket.onmessage = (event) => {
-      const message = JSON.parse(event.data);
-      const { op, d } = message;
-
-      if (op === 1) {
-        // Hello (d is heartbeat interval)
-        socket.send(JSON.stringify({ op: 2, d: { subscribe_to_id: userId } }));
-        
-        heartbeatRef.current = setInterval(() => {
-          socket.send(JSON.stringify({ op: 3 }));
-        }, d.heartbeat_interval);
-      } else if (op === 0) {
-        // Event (INIT_STATE or PRESENCE_UPDATE)
-        setData(d);
-      }
-    };
-
-    socket.onclose = () => {
-      console.log('Lanyard WebSocket closed. Reconnecting...');
-      if (heartbeatRef.current) clearInterval(heartbeatRef.current);
-      setTimeout(connect, 5000);
-    };
-
-    socket.onerror = (error) => {
-      console.error('Lanyard WebSocket error:', error);
-      socket.close();
-    };
-  }, [userId]);
-
+  const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
+ 
   useEffect(() => {
+    function connect() {
+      const socket = new WebSocket(LANYARD_WS);
+      socketRef.current = socket;
+
+      socket.onopen = () => {
+        console.log('Lanyard WebSocket connected');
+      };
+
+      socket.onmessage = (event) => {
+        const message = JSON.parse(event.data);
+        const { op, d } = message;
+
+        if (op === 1) {
+          // Hello (d is heartbeat interval)
+          socket.send(JSON.stringify({ op: 2, d: { subscribe_to_id: userId } }));
+          
+          heartbeatRef.current = setInterval(() => {
+            socket.send(JSON.stringify({ op: 3 }));
+          }, d.heartbeat_interval);
+        } else if (op === 0) {
+          // Event (INIT_STATE or PRESENCE_UPDATE)
+          setData(d);
+        }
+      };
+
+      socket.onclose = () => {
+        console.log('Lanyard WebSocket closed. Reconnecting...');
+        if (heartbeatRef.current) clearInterval(heartbeatRef.current);
+        setTimeout(connect, 5000);
+      };
+
+      socket.onerror = (error) => {
+        console.error('Lanyard WebSocket error:', error);
+        socket.close();
+      };
+    }
+
     connect();
+
     return () => {
       if (socketRef.current) socketRef.current.close();
       if (heartbeatRef.current) clearInterval(heartbeatRef.current);
     };
-  }, [connect]);
+  }, [userId]);
 
   return data;
 };
