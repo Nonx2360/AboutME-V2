@@ -1,5 +1,15 @@
 import type { IncomingMessage, ServerResponse } from 'http';
-import { getRomaji, isJapanese } from './romaji';
+
+let isJapanese: (text: string) => boolean = () => false;
+let getRomaji: (text: string) => Promise<string | null> = async () => null;
+
+try {
+  const romaji = await import('./romaji');
+  isJapanese = romaji.isJapanese;
+  getRomaji = romaji.getRomaji;
+} catch {
+  console.warn('[lyrics] romaji module unavailable, skipping romaji enrichment');
+}
 
 interface VercelRequest extends IncomingMessage {
   query?: Record<string, string>;
@@ -159,9 +169,14 @@ async function fetchFromUnison(
     const params = new URLSearchParams({ song, artist });
     if (album) params.set('album', album);
 
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+
     const res = await fetch(`${UNISON_BASE}/lyrics/search?${params}`, {
       headers: { 'User-Agent': 'AboutMeLiveLyrics/2.0 (https://github.com/nonx2360/AboutME-V2)' },
+      signal: controller.signal,
     });
+    clearTimeout(timeout);
 
     if (!res.ok) return null;
 
@@ -206,9 +221,14 @@ async function fetchFromLrclib(
     if (album) params.set('album_name', album);
     if (durationSec) params.set('duration', durationSec.toString());
 
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+
     const res = await fetch(`https://lrclib.net/api/get?${params}`, {
       headers: { 'User-Agent': 'AboutMeLiveLyrics/2.0 (https://github.com/nonx2360/AboutME-V2)' },
+      signal: controller.signal,
     });
+    clearTimeout(timeout);
 
     if (!res.ok) return null;
 
