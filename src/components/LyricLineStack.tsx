@@ -19,29 +19,41 @@ function getDistance(i: number, active: number): number {
 }
 
 function getLineStyle(dist: number) {
-  if (dist === 0) return { opacity: 1, scale: 1.08, blur: 0, fontWeight: 800 as const };
-  if (dist === 1) return { opacity: 0.45, scale: 1, blur: 0, fontWeight: 700 as const };
-  if (dist === 2) return { opacity: 0.22, scale: 0.97, blur: 0.5, fontWeight: 600 as const };
-  return { opacity: 0.09, scale: 0.94, blur: 1.5, fontWeight: 500 as const };
+  if (dist === 0) return { opacity: 1, scale: 1.05, blur: 0, fontWeight: 700 as const };
+  if (dist === 1) return { opacity: 0.38, scale: 0.98, blur: 0, fontWeight: 600 as const };
+  if (dist === 2) return { opacity: 0.18, scale: 0.95, blur: 0.8, fontWeight: 500 as const };
+  return { opacity: 0.06, scale: 0.92, blur: 2, fontWeight: 400 as const };
 }
 
 function WordSyncLine({ line, activeWordIndex }: { line: SyncedLyricLine; activeWordIndex: number }) {
   const words = line.words ?? [];
   return (
-    <span className="inline flex-wrap justify-center gap-x-[0.35em] gap-y-0">
+    <span className="inline-flex flex-wrap justify-center gap-x-[0.3em] gap-y-0">
       {words.map((w, i) => {
         const isPast = activeWordIndex >= 0 && i < activeWordIndex;
         const isActive = i === activeWordIndex;
-        const wordOpacity = isPast ? 1 : isActive ? 1 : 0.35;
+        const isFuture = !isPast && !isActive;
+
         return (
           <span
             key={`${w.timeMs}-${i}`}
-            className="inline-block transition-all duration-150"
+            className="inline-block transition-all"
             style={{
-              opacity: wordOpacity,
-              fontWeight: isActive ? 800 : 600,
-              fontSize: isActive ? '1.3rem' : '1.15rem',
-              color: isActive ? '#fff' : `rgba(255,255,255,${wordOpacity * 0.9})`,
+              transitionDuration: isActive ? '120ms' : isPast ? '250ms' : '200ms',
+              transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)',
+              fontWeight: isActive ? 800 : isPast ? 700 : 500,
+              fontSize: isActive ? '1.35rem' : isPast ? '1.2rem' : '1.1rem',
+              color: isActive
+                ? '#ffffff'
+                : isPast
+                  ? 'rgba(255,255,255,0.92)'
+                  : 'rgba(255,255,255,0.28)',
+              textShadow: isActive
+                ? '0 0 20px rgba(255,255,255,0.5), 0 0 40px rgba(255,255,255,0.2)'
+                : isPast
+                  ? '0 0 8px rgba(255,255,255,0.15)'
+                  : 'none',
+              filter: isFuture ? 'blur(0.3px)' : 'none',
             }}
           >
             {w.text}
@@ -134,24 +146,27 @@ export function LyricLineStack({
                 >
                   {hasWordSync ? (
                     <p
-                      className="text-center leading-tight max-w-full transition-all duration-300"
+                      className="text-center leading-tight max-w-full transition-all duration-500"
                       style={{
                         fontWeight: style.fontWeight,
                         filter: style.blur > 0 ? `blur(${style.blur}px)` : undefined,
                         transform: `scale(${style.scale})`,
+                        transitionTimingFunction: 'cubic-bezier(0.25, 1, 0.5, 1)',
                       }}
                     >
                       <WordSyncLine line={line} activeWordIndex={activeWordIndex} />
                     </p>
                   ) : (
                     <p
-                      className="text-center leading-tight max-w-full truncate transition-all duration-300"
+                      className="text-center leading-tight max-w-full truncate transition-all duration-500"
                       style={{
-                        fontSize: isActive ? '1.25rem' : '0.9rem',
+                        fontSize: isActive ? '1.2rem' : '0.88rem',
                         fontWeight: style.fontWeight,
                         filter: style.blur > 0 ? `blur(${style.blur}px)` : undefined,
                         transform: `scale(${style.scale})`,
-                        color: isActive ? '#fff' : `rgba(255,255,255,${style.opacity * 0.9})`,
+                        color: isActive ? '#ffffff' : `rgba(255,255,255,${style.opacity * 0.85})`,
+                        textShadow: isActive ? '0 0 24px rgba(255,255,255,0.35)' : 'none',
+                        transitionTimingFunction: 'cubic-bezier(0.25, 1, 0.5, 1)',
                       }}
                     >
                       {line.text}
