@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'http';
+import { getRomaji, isJapanese } from './romaji';
 
 interface VercelRequest extends IncomingMessage {
   query?: Record<string, string>;
@@ -18,12 +19,16 @@ interface LrcLibResponse {
 type SyncedLyricLine = {
   timeMs: number;
   text: string;
+  /** Hepburn Romaji — populated for Japanese lines, null otherwise. */
+  romaji?: string | null;
 };
 
 type LyricsResponse = {
   source: 'lrclib' | 'local' | 'none';
   synced: boolean;
   lines: SyncedLyricLine[];
+  /** True if any line in this track has Japanese content (for client-side UI decisions). */
+  hasJapanese?: boolean;
 };
 
 const cache = new Map<string, LyricsResponse>();
@@ -56,6 +61,30 @@ function parseLrc(lrc: string): SyncedLyricLine[] {
   }
   
   return result.sort((a, b) => a.timeMs - b.timeMs);
+}
+
+/**
+ * Enriches parsed lyric lines with server-side Romaji for Japanese lines.
+ * Non-Japanese lines get `romaji: null` — no extra processing cost.
+ * Runs concurrently for all lines to minimise latency.
+ */
+async function enrichWithRomaji(lines: SyncedLyricLine[]): Promise<{ enriched: SyncedLyricLine[]; hasJapanese: boolean }> {
+  const jpLines = lines.filter(l => isJapanese(l.text));
+
+  // Short-circuit for non-JP tracks — skip kuroshiro init entirely
+  if (jpLines.length === 0) {
+    return { enriched: lines.map(l => ({ ...l, romaji: null })), hasJapanese: false };
+  }
+
+  // Convert all JP lines concurrently
+  const romajiResults = await Promise.all(
+    lines.map(async (line) => {
+      const romaji = await getRomaji(line.text);
+      return { ...line, romaji };
+    })
+  );
+
+  return { enriched: romajiResults, hasJapanese: true };
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -94,18 +123,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'Missing trackId' });
   }
 
-  // 1. Check cache first
+  // 1. Check cache first (already enriched with romaji)
   if (cache.has(trackId)) {
     res.setHeader('Cache-Control', 'public, max-age=3600, stale-while-revalidate=600');
     return res.status(200).json(cache.get(trackId));
   }
 
   // 2. Local fallback if configured (e.g. for specific debug trackIds)
-  // For demo/production flexibility, let's keep a placeholder local check
   const localLyrics: string | null = null;
   if (localLyrics) {
-    const lines = parseLrc(localLyrics);
-    const result: LyricsResponse = { source: 'local', synced: true, lines };
+    const rawLines = parseLrc(localLyrics);
+    const { enriched, hasJapanese } = await enrichWithRomaji(rawLines);
+    const result: LyricsResponse = { source: 'local', synced: true, lines: enriched, hasJapanese };
     cache.set(trackId, result);
     return res.status(200).json(result);
   }
@@ -114,14 +143,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const durationSec = durationMs ? Math.round(parseInt(durationMs, 10) / 1000) : 0;
     
-    // Construct query parameters
     const searchParams = new URLSearchParams();
     if (track) searchParams.set('track_name', track);
     if (artist) searchParams.set('artist_name', artist);
     if (album) searchParams.set('album_name', album);
     if (durationSec) searchParams.set('duration', durationSec.toString());
 
-    // LRCLIB GET endpoint
     const url = `https://lrclib.net/api/get?${searchParams.toString()}`;
     
     const response = await fetch(url, {
@@ -132,8 +159,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (!response.ok) {
       if (response.status === 404) {
-        // Lyrics not found
-        const result: LyricsResponse = { source: 'none', synced: false, lines: [] };
+        const result: LyricsResponse = { source: 'none', synced: false, lines: [], hasJapanese: false };
         cache.set(trackId, result);
         return res.status(200).json(result);
       }
@@ -143,24 +169,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const data = (await response.json()) as LrcLibResponse;
     
     if (data.syncedLyrics) {
-      const lines = parseLrc(data.syncedLyrics);
-      const result: LyricsResponse = { source: 'lrclib', synced: true, lines };
+      const rawLines = parseLrc(data.syncedLyrics);
+      const { enriched, hasJapanese } = await enrichWithRomaji(rawLines);
+      const result: LyricsResponse = { source: 'lrclib', synced: true, lines: enriched, hasJapanese };
       cache.set(trackId, result);
       res.setHeader('Cache-Control', 'public, max-age=3600, stale-while-revalidate=600');
       return res.status(200).json(result);
     } else if (data.plainLyrics) {
-      // Unsynced fallback - return empty lines and synced: false
-      const result: LyricsResponse = { source: 'lrclib', synced: false, lines: [] };
+      // Unsynced fallback
+      const result: LyricsResponse = { source: 'lrclib', synced: false, lines: [], hasJapanese: false };
       cache.set(trackId, result);
       return res.status(200).json(result);
     } else {
-      const result: LyricsResponse = { source: 'none', synced: false, lines: [] };
+      const result: LyricsResponse = { source: 'none', synced: false, lines: [], hasJapanese: false };
       cache.set(trackId, result);
       return res.status(200).json(result);
     }
   } catch (error: unknown) {
     console.error('Error fetching lyrics from LRCLIB:', error);
-    // Don't cache errors, but return empty result gracefully to keep UI working
-    return res.status(200).json({ source: 'none', synced: false, lines: [] });
+    return res.status(200).json({ source: 'none', synced: false, lines: [], hasJapanese: false });
   }
 }

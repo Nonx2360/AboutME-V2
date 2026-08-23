@@ -84,6 +84,7 @@ export function useSyncedLyrics(
     nextLine,
     activeIndex,
     hasSyncedLyrics: synced && lines.length > 0,
+    hasJapanese: lyricsData?.hasJapanese ?? false,
     loading,
     lines,
     source: lyricsData?.source || 'none',

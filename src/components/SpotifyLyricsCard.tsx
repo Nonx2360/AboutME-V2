@@ -88,6 +88,7 @@ export function SpotifyLyricsCard({ lanyardSpotify }: SpotifyLyricsCardProps) {
     previousLine,
     nextLine,
     hasSyncedLyrics,
+    hasJapanese,
     loading: lyricsLoading,
     source: lyricsSource,
   } = useSyncedLyrics(
@@ -212,6 +213,7 @@ export function SpotifyLyricsCard({ lanyardSpotify }: SpotifyLyricsCardProps) {
             activeLine={activeLine}
             previousLine={previousLine}
             nextLine={nextLine}
+            hasJapanese={hasJapanese}
           />
         ) : (
           <div className="flex flex-col items-center justify-center py-10 text-center">
