@@ -34,15 +34,19 @@ interface SpotifyCurrentlyPlaying {
   } | null;
 }
 
-const client_id = process.env.SPOTIFY_CLIENT_ID;
-const client_secret = process.env.SPOTIFY_CLIENT_SECRET;
-const refresh_token = process.env.SPOTIFY_REFRESH_TOKEN;
-
-const basic = Buffer.from(`${client_id}:${client_secret}`).toString('base64');
 const NOW_PLAYING_ENDPOINT = `https://api.spotify.com/v1/me/player/currently-playing`;
 const TOKEN_ENDPOINT = `https://accounts.spotify.com/api/token`;
 
-async function getAccessToken() {
+function getSpotifyEnv() {
+  return {
+    client_id: process.env.SPOTIFY_CLIENT_ID,
+    client_secret: process.env.SPOTIFY_CLIENT_SECRET,
+    refresh_token: process.env.SPOTIFY_REFRESH_TOKEN,
+  };
+}
+
+async function getAccessToken(client_id: string, client_secret: string, refresh_token: string) {
+  const basic = Buffer.from(`${client_id}:${client_secret}`).toString('base64');
   const response = await fetch(TOKEN_ENDPOINT, {
     method: 'POST',
     headers: {
@@ -73,13 +77,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
+  const { client_id, client_secret, refresh_token } = getSpotifyEnv();
+
   if (!client_id || !client_secret || !refresh_token) {
     console.error('Missing Spotify environment variables');
     return res.status(500).json({ error: 'Spotify environment variables are not configured' });
   }
 
   try {
-    const tokenResponse = (await getAccessToken()) as TokenResponse;
+    const tokenResponse = (await getAccessToken(client_id, client_secret, refresh_token)) as TokenResponse;
     if (tokenResponse.error) {
       console.error('Spotify token exchange failed:', tokenResponse);
       return res.status(401).json({ error: 'Spotify connection needs refresh', details: tokenResponse.error_description });

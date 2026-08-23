@@ -4,6 +4,12 @@ import { motion, AnimatePresence, useMotionValue, useSpring } from 'framer-motio
 import { SpotifyLyricsCard } from './SpotifyLyricsCard';
 import { ActivityInner } from './SharedComponents';
 import { useRef, useState, useEffect } from 'react';
+import gsap from 'gsap';
+import { ScrollTrigger } from 'gsap/ScrollTrigger';
+import { SplitText } from 'gsap/SplitText';
+import { useGSAP } from '@gsap/react';
+
+gsap.registerPlugin(ScrollTrigger, SplitText, useGSAP);
 
 /* ─── Magnetic ─────────────────────────────────────────────────────────── */
 const Magnetic = ({ children }: { children: React.ReactNode }) => {
@@ -38,9 +44,38 @@ const Magnetic = ({ children }: { children: React.ReactNode }) => {
 
 /* ─── SectionLabel ──────────────────────────────────────────────────────── */
 const SectionLabel = ({ text }: { text: string }) => (
-  <div className="flex items-center gap-4 mb-12 group">
+  <div className="flex items-center gap-4 mb-12 group" data-reveal>
     <div className="section-label-line w-8" />
     <span className="font-sans text-[10px] font-black uppercase tracking-[0.5em] text-accent transition-all group-hover:tracking-[0.8em]">{text}</span>
+  </div>
+);
+
+/* ─── Marquee ───────────────────────────────────────────────────────────── */
+const MARQUEE_ITEMS = [
+  'Full Stack Developer',
+  'Based in Thailand',
+  'React · TypeScript · Python',
+  'Open Source',
+  'Available for Work',
+];
+
+const Marquee = () => (
+  <div className="marquee border-y border-white/5 py-6 my-4" aria-hidden="true">
+    <div className="marquee-track">
+      {[0, 1].map((copy) => (
+        <div key={copy} className="flex items-center shrink-0" aria-hidden={copy === 1}>
+          {MARQUEE_ITEMS.map((text) => (
+            <span
+              key={`${copy}-${text}`}
+              className="flex items-center text-2xl md:text-4xl font-black uppercase tracking-tight text-white/10 whitespace-nowrap"
+            >
+              <span className="px-8">{text}</span>
+              <span className="text-accent/50 text-base align-middle">✦</span>
+            </span>
+          ))}
+        </div>
+      ))}
+    </div>
   </div>
 );
 
@@ -67,7 +102,7 @@ const Navbar = () => {
         {/* Logo / home anchor */}
         <button
           onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-          className="flex items-center gap-3 group"
+          className="flex items-center gap-3 group cursor-pointer"
           aria-label="Scroll to top"
         >
           <div className="w-3 h-3 rounded-full bg-accent group-hover:scale-125 transition-transform glow-accent" />
@@ -82,7 +117,7 @@ const Navbar = () => {
             <button
               key={link.href}
               onClick={() => handleNavClick(link.href)}
-              className="navbar-link"
+              className="navbar-link cursor-pointer"
             >
               {link.label}
             </button>
@@ -91,7 +126,7 @@ const Navbar = () => {
 
         {/* Mobile hamburger */}
         <button
-          className="md:hidden text-white/40 hover:text-white transition-colors"
+          className="md:hidden text-white/40 hover:text-white transition-colors cursor-pointer"
           onClick={() => setOpen(prev => !prev)}
           aria-label="Toggle menu"
         >
@@ -114,7 +149,7 @@ const Navbar = () => {
               <button
                 key={link.href}
                 onClick={() => handleNavClick(link.href)}
-                className="navbar-link"
+                className="navbar-link cursor-pointer"
               >
                 {link.label}
               </button>
@@ -129,6 +164,111 @@ const Navbar = () => {
 /* ─── Main Component ────────────────────────────────────────────────────── */
 export const AboutMe = ({ userId }: { userId: string }) => {
   const data = useLanyard(userId);
+  const root = useRef<HTMLDivElement>(null);
+
+  /* ── GSAP scroll choreography (skipped entirely for reduced-motion users) */
+  useGSAP(() => {
+    if (!root.current) return;
+
+    const mm = gsap.matchMedia();
+
+    mm.add('(prefers-reduced-motion: no-preference)', () => {
+      /* Scroll progress bar */
+      gsap.to('.scroll-progress', {
+        scaleX: 1,
+        ease: 'none',
+        scrollTrigger: { start: 0, end: 'max', scrub: 0.3 },
+      });
+
+      /* Navbar solidifies after leaving top */
+      ScrollTrigger.create({
+        start: 'top -60',
+        end: 99999,
+        toggleClass: { targets: '.navbar', className: 'navbar-scrolled' },
+      });
+
+      /* Hero entrance — masked char reveal once webfonts are ready */
+      const titles = root.current!.querySelectorAll('.hero-title');
+      let chars: Element[] = [];
+      try {
+        chars = SplitText.create(titles, { type: 'chars', mask: 'lines' }).chars ?? [];
+      } catch {
+        chars = [];
+      }
+      gsap.set(chars, { yPercent: 115 });
+      gsap.set('.hero-label', { autoAlpha: 0, y: 20 });
+      gsap.set('.hero-subtitle', { autoAlpha: 0, y: 28 });
+      gsap.set('.hero-cta > *', { autoAlpha: 0, y: 22 });
+      gsap.set('.hero-scroll-cue', { autoAlpha: 0 });
+      gsap.set('.hero-glow', { autoAlpha: 0 });
+
+      const heroTl = gsap.timeline({ defaults: { ease: 'power4.out' }, paused: true })
+        .to('.hero-glow', { autoAlpha: 1, duration: 1.6, ease: 'power2.out' }, 0)
+        .to('.hero-label', { autoAlpha: 1, y: 0, duration: 0.7 }, 0.15)
+        .to(chars, { yPercent: 0, duration: 1.1, stagger: 0.032 }, 0.25)
+        .to('.hero-subtitle', { autoAlpha: 1, y: 0, duration: 0.9 }, 0.75)
+        .to('.hero-cta > *', { autoAlpha: 1, y: 0, duration: 0.7, stagger: 0.08 }, 0.9)
+        .to('.hero-scroll-cue', { autoAlpha: 1, duration: 0.8 }, 1.2);
+
+      if (document.fonts) {
+        document.fonts.ready.then(() => heroTl.play());
+      } else {
+        heroTl.play();
+      }
+
+      /* Scroll cue line loop */
+      gsap.to('.scroll-cue-line', {
+        scaleY: 0.15,
+        transformOrigin: 'top center',
+        duration: 1.1,
+        ease: 'power2.inOut',
+        repeat: -1,
+        yoyo: true,
+      });
+
+      /* Generic scroll reveals */
+      root.current!.querySelectorAll<HTMLElement>('[data-reveal]').forEach((el) => {
+        gsap.from(el, {
+          y: 48,
+          autoAlpha: 0,
+          duration: 1,
+          ease: 'power3.out',
+          delay: parseFloat(el.dataset.revealDelay ?? '0'),
+          scrollTrigger: { trigger: el, start: 'top 85%', once: true },
+        });
+      });
+
+      /* Staggered group reveals */
+      root.current!.querySelectorAll<HTMLElement>('[data-reveal-group]').forEach((group) => {
+        gsap.from(Array.from(group.children), {
+          y: 40,
+          autoAlpha: 0,
+          duration: 0.9,
+          ease: 'power3.out',
+          stagger: 0.09,
+          scrollTrigger: { trigger: group, start: 'top 80%', once: true },
+        });
+      });
+
+      /* Footer giant type parallax scrub */
+      gsap.fromTo(
+        '.footer-giant',
+        { yPercent: 28 },
+        {
+          yPercent: -8,
+          ease: 'none',
+          scrollTrigger: {
+            trigger: '#contact',
+            start: 'top bottom',
+            end: 'bottom top',
+            scrub: true,
+          },
+        }
+      );
+    });
+
+    return () => mm.revert();
+  }, { scope: root });
 
   const projects = [
     {
@@ -167,13 +307,16 @@ export const AboutMe = ({ userId }: { userId: string }) => {
     return () => { document.body.style.overflow = ''; };
   }, [selectedProject]);
 
-  if (!data) return null;
-
-  const { activities, spotify } = data;
+  const activities = data?.activities ?? [];
   const filteredActivities = activities.filter((a) => a.type !== 4 && a.name !== 'Spotify');
+  const spotify = data?.spotify;
 
   return (
-    <div className="relative min-h-screen bg-black overflow-x-hidden">
+    <div ref={root} className="relative min-h-screen bg-black overflow-x-hidden">
+      {/* Scroll progress + film grain */}
+      <div className="scroll-progress" aria-hidden="true" />
+      <div className="noise-overlay" aria-hidden="true" />
+
       {/* Fixed Navbar */}
       <Navbar />
 
@@ -191,12 +334,8 @@ export const AboutMe = ({ userId }: { userId: string }) => {
 
         {/* ── Hero ─────────────────────────────────────────────────────── */}
         <section className="hero-section pb-24">
-          <motion.div
-            initial={{ opacity: 0, y: 50 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.8, ease: [0.23, 1, 0.32, 1] }}
-          >
+          <div className="hero-glow" aria-hidden="true" />
+          <div className="relative">
             <div className="hero-label">Full Stack Developer</div>
             <h1 className="hero-title text-accent">NUTCHANON</h1>
             <h1 className="hero-title text-white">NONX2</h1>
@@ -204,11 +343,11 @@ export const AboutMe = ({ userId }: { userId: string }) => {
               Crafting high-performance, scalable, and intuitive web solutions.
               Based in Thailand, fueling ideas with music and code.
             </p>
-            <div className="mt-16 flex flex-wrap gap-6">
+            <div className="hero-cta mt-16 flex flex-wrap gap-6">
               <Magnetic>
                 <a
                   href="#contact"
-                  className="px-10 py-5 bg-accent text-white font-black text-[10px] uppercase tracking-widest hover:brightness-125 transition-all glow-accent block"
+                  className="px-10 py-5 bg-accent text-white font-black text-[10px] uppercase tracking-widest hover:brightness-125 transition-all glow-accent block cursor-pointer"
                 >
                   Get In Touch
                 </a>
@@ -216,26 +355,35 @@ export const AboutMe = ({ userId }: { userId: string }) => {
               <Magnetic>
                 <a
                   href="#projects"
-                  className="px-10 py-5 border border-white/20 text-white font-black text-[10px] uppercase tracking-widest hover:border-white/60 hover:bg-white/5 transition-all block"
+                  className="px-10 py-5 border border-white/20 text-white font-black text-[10px] uppercase tracking-widest hover:border-white/60 hover:bg-white/5 transition-all block cursor-pointer"
                 >
                   View Work
                 </a>
               </Magnetic>
             </div>
-          </motion.div>
+          </div>
+
+          {/* Scroll cue */}
+          <div className="hero-scroll-cue absolute bottom-10 left-1/2 -translate-x-1/2 hidden md:flex flex-col items-center gap-3">
+            <span className="text-[9px] font-black uppercase tracking-[0.4em] text-white/30">Scroll</span>
+            <div className="w-px h-14 bg-white/10 overflow-hidden">
+              <div className="scroll-cue-line w-full h-full bg-accent" />
+            </div>
+          </div>
         </section>
+
+        {/* ── Marquee ──────────────────────────────────────────────────── */}
+        <Marquee />
 
         {/* ── Projects ─────────────────────────────────────────────────── */}
         <section id="projects" className="py-32">
           <SectionLabel text="Selected Projects" />
           <div className="space-y-2">
             {projects.map((project, i) => (
-              <motion.div
+              <div
                 key={i}
-                initial={{ opacity: 0, y: 40 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: '-100px' }}
-                transition={{ duration: 0.8, delay: i * 0.1, ease: [0.23, 1, 0.32, 1] }}
+                data-reveal
+                data-reveal-delay={(i * 0.05).toString()}
                 onClick={() => setSelectedProject(project)}
                 className="group py-12 project-card flex flex-col md:flex-row md:items-end justify-between hover:px-8 transition-all cursor-pointer"
               >
@@ -268,7 +416,7 @@ export const AboutMe = ({ userId }: { userId: string }) => {
                   <div className="text-[10px] font-black uppercase tracking-widest">View Details</div>
                   <ArrowRight size={20} />
                 </div>
-              </motion.div>
+              </div>
             ))}
           </div>
         </section>
@@ -276,20 +424,14 @@ export const AboutMe = ({ userId }: { userId: string }) => {
         {/* ── Arsenal ──────────────────────────────────────────────────── */}
         <section id="arsenal" className="py-32">
           <SectionLabel text="My Arsenal" />
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-16">
+          <div data-reveal-group className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-16">
             {[
               { label: 'Frontend', items: ['React', 'TypeScript', 'Tailwind', 'Framer'] },
               { label: 'Backend', items: ['Node.js', 'Python', 'FastAPI', 'PostgreSQL'] },
               { label: 'Tools', items: ['Git', 'Arch Linux', 'Docker', 'Vercel'] },
               { label: 'Design', items: ['Figma', 'Clean UI', 'Typography', 'Motion'] }
             ].map((cat, i) => (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.1 }}
-              >
+              <div key={i}>
                 {/* Category header with accent underline */}
                 <div className="mb-10">
                   <h4 className="text-xs font-black text-accent uppercase tracking-widest opacity-70 inline-block pb-1 border-b border-accent/30">
@@ -306,7 +448,7 @@ export const AboutMe = ({ userId }: { userId: string }) => {
                     </span>
                   ))}
                 </div>
-              </motion.div>
+              </div>
             ))}
           </div>
         </section>
@@ -317,24 +459,20 @@ export const AboutMe = ({ userId }: { userId: string }) => {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
 
             {/* Spotify */}
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              whileInView={{ opacity: 1, scale: 1 }}
-              viewport={{ once: true }}
+            <div
+              data-reveal
               className="status-card p-8 rounded-3xl relative overflow-hidden group min-h-[200px] flex flex-col justify-between"
             >
               <div className="absolute top-0 right-0 p-6 text-white/5 group-hover:text-accent/20 transition-colors pointer-events-none">
                 <Music size={64} strokeWidth={1} />
               </div>
               <SpotifyLyricsCard lanyardSpotify={spotify} />
-            </motion.div>
+            </div>
 
             {/* Activity */}
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              whileInView={{ opacity: 1, scale: 1 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.1 }}
+            <div
+              data-reveal
+              data-reveal-delay="0.08"
               className="status-card p-8 rounded-3xl relative overflow-hidden group min-h-[200px]"
             >
               <div className="absolute top-0 right-0 p-6 text-white/5 group-hover:text-accent/20 transition-colors">
@@ -356,25 +494,21 @@ export const AboutMe = ({ userId }: { userId: string }) => {
                   )}
                 </div>
               </div>
-            </motion.div>
+            </div>
           </div>
         </section>
 
         {/* ── Contact / Footer ─────────────────────────────────────────── */}
         <footer id="contact" className="py-32 text-center">
-          <motion.div
-            initial={{ opacity: 0, y: 50 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-          >
-            <h2 className="text-5xl lg:text-[10rem] font-black text-white mb-16 tracking-tighter leading-none">
+          <div data-reveal>
+            <h2 className="footer-giant text-5xl lg:text-[10rem] font-black text-white mb-16 tracking-tighter leading-none">
               LET'S <br /> <span className="text-accent underline decoration-white/5 underline-offset-[20px]">TALK</span>
             </h2>
 
             {/* Centered contact layout */}
             <div className="flex flex-col items-center gap-6">
               <Magnetic>
-                <a href="mailto:nutchanon9911@gmail.com" className="group flex items-center gap-4 text-white/40 hover:text-white transition-colors">
+                <a href="mailto:nutchanon9911@gmail.com" className="group flex items-center gap-4 text-white/40 hover:text-white transition-colors cursor-pointer">
                   <Mail size={22} />
                   <span className="font-black text-xl lg:text-3xl tracking-tight">nutchanon9911@gmail.com</span>
                 </a>
@@ -387,16 +521,16 @@ export const AboutMe = ({ userId }: { userId: string }) => {
                   href="https://discord.com/users/908945543223463997"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="bg-white text-black px-14 py-6 font-black text-[12px] uppercase tracking-[0.3em] hover:bg-accent hover:text-white transition-all inline-block"
+                  className="bg-white text-black px-14 py-6 font-black text-[12px] uppercase tracking-[0.3em] hover:bg-accent hover:text-white transition-all inline-block cursor-pointer"
                 >
                   Discord
                 </a>
               </Magnetic>
             </div>
-          </motion.div>
+          </div>
 
           {/* Footer bar */}
-          <div className="mt-40 pt-16 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-8 opacity-60">
+          <div data-reveal className="mt-40 pt-16 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-8 opacity-60">
             <div className="text-[10px] font-black uppercase tracking-widest text-white/60">© 2026 NONX2 DESIGN SYSTEM</div>
             <div className="flex gap-12">
               {[
@@ -409,7 +543,7 @@ export const AboutMe = ({ userId }: { userId: string }) => {
                   href={social.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-[10px] font-black uppercase tracking-widest text-white/60 hover:text-accent transition-colors"
+                  className="text-[10px] font-black uppercase tracking-widest text-white/60 hover:text-accent transition-colors cursor-pointer"
                 >
                   {social.name}
                 </a>
@@ -439,7 +573,7 @@ export const AboutMe = ({ userId }: { userId: string }) => {
                 {/* Close */}
                 <button
                   onClick={() => setSelectedProject(null)}
-                  className="absolute top-6 right-6 z-10 w-10 h-10 bg-black/50 hover:bg-white/10 rounded-full flex items-center justify-center text-white/50 hover:text-white transition-colors backdrop-blur-md"
+                  className="absolute top-6 right-6 z-10 w-10 h-10 bg-black/50 hover:bg-white/10 rounded-full flex items-center justify-center text-white/50 hover:text-white transition-colors backdrop-blur-md cursor-pointer"
                 >
                   <X size={20} />
                 </button>
@@ -482,7 +616,7 @@ export const AboutMe = ({ userId }: { userId: string }) => {
                       href={selectedProject.githubUrl}
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex items-center gap-3 bg-white text-black px-8 py-4 font-black text-[12px] uppercase tracking-[0.2em] hover:bg-accent hover:text-white transition-all w-fit group"
+                      className="inline-flex items-center gap-3 bg-white text-black px-8 py-4 font-black text-[12px] uppercase tracking-[0.2em] hover:bg-accent hover:text-white transition-all w-fit group cursor-pointer"
                     >
                       <Code2 size={18} className="transition-transform group-hover:scale-110" />
                       View Repository

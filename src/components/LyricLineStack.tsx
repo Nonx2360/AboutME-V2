@@ -1,224 +1,218 @@
+import { useRef, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import type { SyncedLyricLine } from '../types/spotify';
 import { useState } from 'react';
 
 interface LyricLineStackProps {
-  activeLine: SyncedLyricLine | null;
-  previousLine: SyncedLyricLine | null;
-  nextLine: SyncedLyricLine | null;
-  /** Passed from useSyncedLyrics — true when the track has any Japanese lines. */
+  lines: SyncedLyricLine[];
+  activeIndex: number;
+  activeWordIndex: number;
   hasJapanese?: boolean;
 }
 
-export function LyricLineStack({ activeLine, previousLine, nextLine, hasJapanese = false }: LyricLineStackProps) {
-  const shouldReduceMotion = useReducedMotion();
-  // Romaji is ON by default when Japanese is detected
+const LINE_H = 52;
+const VISIBLE = 7;
+const CENTER = Math.floor(VISIBLE / 2);
+
+function getDistance(i: number, active: number): number {
+  return Math.abs(i - active);
+}
+
+function getLineStyle(dist: number) {
+  if (dist === 0) return { opacity: 1, scale: 1.08, blur: 0, fontWeight: 800 as const };
+  if (dist === 1) return { opacity: 0.45, scale: 1, blur: 0, fontWeight: 700 as const };
+  if (dist === 2) return { opacity: 0.22, scale: 0.97, blur: 0.5, fontWeight: 600 as const };
+  return { opacity: 0.09, scale: 0.94, blur: 1.5, fontWeight: 500 as const };
+}
+
+function WordSyncLine({ line, activeWordIndex }: { line: SyncedLyricLine; activeWordIndex: number }) {
+  const words = line.words ?? [];
+  return (
+    <span className="inline flex-wrap justify-center gap-x-[0.35em] gap-y-0">
+      {words.map((w, i) => {
+        const isPast = activeWordIndex >= 0 && i < activeWordIndex;
+        const isActive = i === activeWordIndex;
+        const wordOpacity = isPast ? 1 : isActive ? 1 : 0.35;
+        return (
+          <span
+            key={`${w.timeMs}-${i}`}
+            className="inline-block transition-all duration-150"
+            style={{
+              opacity: wordOpacity,
+              fontWeight: isActive ? 800 : 600,
+              fontSize: isActive ? '1.3rem' : '1.15rem',
+              color: isActive ? '#fff' : `rgba(255,255,255,${wordOpacity * 0.9})`,
+            }}
+          >
+            {w.text}
+          </span>
+        );
+      })}
+    </span>
+  );
+}
+
+export function LyricLineStack({
+  lines,
+  activeIndex,
+  activeWordIndex,
+  hasJapanese = false,
+}: LyricLineStackProps) {
+  const reduced = useReducedMotion();
   const [romajiEnabled, setRomajiEnabled] = useState(true);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const lyricsWrapRef = useRef<HTMLDivElement>(null);
 
-  // ── Animation variants ───────────────────────────────────────────────────────
+  const safeLines = useMemo(() => lines ?? [], [lines]);
 
-  const activeVariants = {
-    initial: {
-      opacity: 0,
-      y: shouldReduceMotion ? 0 : 12,
-      filter: 'blur(4px)',
-    },
-    animate: {
-      opacity: 1,
-      y: 0,
-      filter: 'blur(0px)',
-      transition: { duration: 0.3, ease: [0.25, 1, 0.5, 1] as const },
-    },
-    exit: {
-      opacity: 0,
-      y: shouldReduceMotion ? 0 : -12,
-      filter: 'blur(4px)',
-      transition: { duration: 0.25, ease: [0.25, 1, 0.5, 1] as const },
-    },
-  };
+  const windowLines = useMemo(() => {
+    if (safeLines.length === 0) return [];
+    const start = Math.max(0, activeIndex - CENTER);
+    const end = Math.min(safeLines.length, start + VISIBLE);
+    const s = Math.max(0, end - VISIBLE);
+    return safeLines.slice(s, end);
+  }, [safeLines, activeIndex]);
 
-  const contextVariants = {
-    initial: { opacity: 0, y: shouldReduceMotion ? 0 : 8 },
-    animate: (opacityValue: number) => ({
-      opacity: opacityValue,
-      y: 0,
-      transition: { duration: 0.3 },
-    }),
-    exit: { opacity: 0, y: shouldReduceMotion ? 0 : -8, transition: { duration: 0.25 } },
-  };
+  const windowStart = useMemo(() => {
+    if (safeLines.length === 0) return 0;
+    const start = Math.max(0, activeIndex - CENTER);
+    const end = Math.min(safeLines.length, start + VISIBLE);
+    return Math.max(0, end - VISIBLE);
+  }, [safeLines, activeIndex]);
 
-  const romajiVariants = {
-    initial: { opacity: 0, y: 4 },
-    animate: { opacity: 1, y: 0, transition: { duration: 0.25, delay: 0.08 } },
-    exit: { opacity: 0, y: -4, transition: { duration: 0.2 } },
-  };
+  useEffect(() => {
+    if (reduced || !containerRef.current || windowLines.length === 0) return;
 
-  // ── Resolved romaji strings (from server — null for non-JP lines) ─────────
+    const localActive = activeIndex - windowStart;
+    if (localActive < 0 || localActive >= windowLines.length) return;
 
-  const activeRomaji = romajiEnabled ? (activeLine?.romaji ?? null) : null;
-  const prevRomaji   = romajiEnabled ? (previousLine?.romaji ?? null) : null;
-  const nextRomaji   = romajiEnabled ? (nextLine?.romaji ?? null) : null;
+    const container = containerRef.current;
+    const containerH = container.clientHeight;
+    const centerOffset = (containerH - LINE_H) / 2;
+    const targetY = -(localActive * LINE_H) + centerOffset;
 
-  // ── Render ───────────────────────────────────────────────────────────────────
+    lyricsWrapRef.current!.animate(
+      [{ transform: `translateY(${targetY}px)` }],
+      { duration: 500, easing: 'cubic-bezier(0.25, 1, 0.5, 1)', fill: 'forwards' }
+    );
+  }, [activeIndex, windowStart, windowLines.length, reduced]);
 
   return (
-    <div className="flex flex-col items-center justify-center space-y-3 my-6 text-center select-none min-h-[140px] overflow-hidden w-full">
+    <div className="relative w-full select-none min-h-[200px]">
+      {/* Gradient masks */}
+      <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-black/90 to-transparent z-10 pointer-events-none" />
+      <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/90 to-transparent z-10 pointer-events-none" />
 
-      {/* Previous Lyric Line */}
+      {/* Scrollable lyrics area */}
       <div
-        className="flex items-center justify-center overflow-hidden w-full px-4 transition-all duration-300"
-        style={{ minHeight: prevRomaji ? '3.25rem' : '1.5rem' }}
+        ref={containerRef}
+        className="overflow-hidden relative z-0"
+        style={{ height: `${VISIBLE * LINE_H}px` }}
       >
-        <AnimatePresence mode="popLayout">
-          {previousLine && (
-            <motion.div
-              key={`prev-${previousLine.timeMs}`}
-              variants={contextVariants}
-              custom={0.3}
-              initial="initial"
-              animate="animate"
-              exit="exit"
-              className="flex flex-col items-center gap-0.5 w-full"
-            >
-              <p className="text-xs md:text-sm font-medium text-white/30 truncate max-w-full">
-                {previousLine.text}
-              </p>
-              <AnimatePresence>
-                {prevRomaji && (
-                  <motion.p
-                    key={`prev-rom-${previousLine.timeMs}`}
-                    variants={romajiVariants}
-                    initial="initial"
-                    animate="animate"
-                    exit="exit"
-                    className="text-[10px] font-medium text-white/20 truncate max-w-full tracking-wide italic"
-                  >
-                    {prevRomaji}
-                  </motion.p>
-                )}
-              </AnimatePresence>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        <div ref={lyricsWrapRef}>
+          <AnimatePresence mode="popLayout">
+            {windowLines.map((line, i) => {
+              const globalIdx = windowStart + i;
+              const dist = getDistance(globalIdx, activeIndex);
+              const style = getLineStyle(dist);
+              const isActive = dist === 0;
+              const hasWordSync = isActive && line.words && line.words.length > 1;
+
+              return (
+                <motion.div
+                  key={`${line.timeMs}-${line.text}`}
+                  layout
+                  initial={{ opacity: 0, y: reduced ? 0 : 10 }}
+                  animate={{
+                    opacity: style.opacity,
+                    y: 0,
+                    transition: { duration: 0.45, ease: [0.25, 1, 0.5, 1] },
+                  }}
+                  exit={{ opacity: 0, y: reduced ? 0 : -10, transition: { duration: 0.25 } }}
+                  className="flex flex-col items-center justify-center px-4"
+                  style={{ height: `${LINE_H}px` }}
+                >
+                  {hasWordSync ? (
+                    <p
+                      className="text-center leading-tight max-w-full transition-all duration-300"
+                      style={{
+                        fontWeight: style.fontWeight,
+                        filter: style.blur > 0 ? `blur(${style.blur}px)` : undefined,
+                        transform: `scale(${style.scale})`,
+                      }}
+                    >
+                      <WordSyncLine line={line} activeWordIndex={activeWordIndex} />
+                    </p>
+                  ) : (
+                    <p
+                      className="text-center leading-tight max-w-full truncate transition-all duration-300"
+                      style={{
+                        fontSize: isActive ? '1.25rem' : '0.9rem',
+                        fontWeight: style.fontWeight,
+                        filter: style.blur > 0 ? `blur(${style.blur}px)` : undefined,
+                        transform: `scale(${style.scale})`,
+                        color: isActive ? '#fff' : `rgba(255,255,255,${style.opacity * 0.9})`,
+                      }}
+                    >
+                      {line.text}
+                    </p>
+                  )}
+
+                  <AnimatePresence>
+                    {isActive && romajiEnabled && line.romaji && (
+                      <motion.p
+                        initial={{ opacity: 0, y: 3 }}
+                        animate={{ opacity: 0.7, y: 0, transition: { duration: 0.3, delay: 0.05 } }}
+                        exit={{ opacity: 0, y: -3, transition: { duration: 0.2 } }}
+                        className="text-[10px] font-medium tracking-wider italic mt-0.5"
+                        style={{ color: 'rgba(29,185,84,0.8)' }}
+                      >
+                        {line.romaji}
+                      </motion.p>
+                    )}
+                  </AnimatePresence>
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
+        </div>
       </div>
 
-      {/* Active Lyric Line (Focus) */}
-      <div
-        className="flex items-center justify-center overflow-hidden w-full px-6 py-1 transition-all duration-300"
-        style={{ minHeight: activeRomaji ? '5.75rem' : '4rem' }}
-      >
-        <AnimatePresence mode="popLayout">
-          {activeLine ? (
-            <motion.div
-              key={`active-${activeLine.timeMs}`}
-              variants={activeVariants}
-              initial="initial"
-              animate="animate"
-              exit="exit"
-              className="flex flex-col items-center gap-1.5 w-full"
-            >
-              {/* Primary lyric */}
-              <p
-                className="text-base md:text-xl font-black text-white tracking-tight leading-snug max-w-full"
-                style={{ textShadow: '0 2px 10px rgba(255,255,255,0.08)' }}
-              >
-                {activeLine.text}
-              </p>
-
-              {/* Romaji sub-line — animated in/out with toggle */}
-              <AnimatePresence mode="popLayout">
-                {activeRomaji && (
-                  <motion.p
-                    key={`active-rom-${activeLine.timeMs}`}
-                    variants={romajiVariants}
-                    initial="initial"
-                    animate="animate"
-                    exit="exit"
-                    className="text-xs md:text-sm font-medium tracking-wider italic max-w-full truncate"
-                    style={{ color: 'rgba(29,185,84,0.75)' }}
-                  >
-                    {activeRomaji}
-                  </motion.p>
-                )}
-              </AnimatePresence>
-            </motion.div>
-          ) : (
-            <motion.p
-              key="intro-outro"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 0.2 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.4 }}
-              className="text-sm font-serif italic text-white/30"
-            >
-              Instrumental / Intro
-            </motion.p>
-          )}
-        </AnimatePresence>
-      </div>
-
-      {/* Next Lyric Line */}
-      <div
-        className="flex items-center justify-center overflow-hidden w-full px-4 transition-all duration-300"
-        style={{ minHeight: nextRomaji ? '3.25rem' : '1.5rem' }}
-      >
-        <AnimatePresence mode="popLayout">
-          {nextLine && (
-            <motion.div
-              key={`next-${nextLine.timeMs}`}
-              variants={contextVariants}
-              custom={0.4}
-              initial="initial"
-              animate="animate"
-              exit="exit"
-              className="flex flex-col items-center gap-0.5 w-full"
-            >
-              <p className="text-xs md:text-sm font-medium text-white/40 truncate max-w-full">
-                {nextLine.text}
-              </p>
-              <AnimatePresence>
-                {nextRomaji && (
-                  <motion.p
-                    key={`next-rom-${nextLine.timeMs}`}
-                    variants={romajiVariants}
-                    initial="initial"
-                    animate="animate"
-                    exit="exit"
-                    className="text-[10px] font-medium text-white/25 truncate max-w-full tracking-wide italic"
-                  >
-                    {nextRomaji}
-                  </motion.p>
-                )}
-              </AnimatePresence>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-
-      {/* ── Romaji toggle pill — only visible on JP tracks ── */}
+      {/* Romaji toggle */}
       <AnimatePresence>
         {hasJapanese && (
           <motion.button
             key="romaji-toggle"
-            initial={{ opacity: 0, y: 6, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1, transition: { duration: 0.25 } }}
-            exit={{ opacity: 0, y: 6, scale: 0.9, transition: { duration: 0.2 } }}
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 4 }}
             onClick={() => setRomajiEnabled(v => !v)}
             aria-pressed={romajiEnabled}
             aria-label={romajiEnabled ? 'Hide Romaji' : 'Show Romaji'}
-            className="flex items-center gap-1.5 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest transition-all duration-200 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/60"
+            className="absolute bottom-0 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest transition-all duration-200 cursor-pointer focus-visible:outline-2 focus-visible:outline-accent"
             style={{
-              background: romajiEnabled
-                ? 'rgba(29,185,84,0.12)'
-                : 'rgba(255,255,255,0.05)',
+              background: romajiEnabled ? 'rgba(29,185,84,0.12)' : 'rgba(255,255,255,0.05)',
               color: romajiEnabled ? '#1db954' : 'rgba(255,255,255,0.22)',
-              border: `1px solid ${romajiEnabled ? 'rgba(29,185,84,0.30)' : 'rgba(255,255,255,0.08)'}`,
+              border: `1px solid ${romajiEnabled ? 'rgba(29,185,84,0.3)' : 'rgba(255,255,255,0.08)'}`,
             }}
           >
-            {/* Katakana "ロ" as indicator */}
-            <span style={{ fontFamily: 'serif', fontSize: '10px', lineHeight: 1 }}>あ</span>
+            <span style={{ fontFamily: 'serif', fontSize: '10px' }}>あ</span>
             {romajiEnabled ? 'Romaji ON' : 'Romaji OFF'}
           </motion.button>
+        )}
+      </AnimatePresence>
+
+      {/* Instrumental / empty state */}
+      <AnimatePresence>
+        {safeLines.length > 0 && activeIndex === -1 && (
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 0.25 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 flex items-center justify-center text-sm font-serif italic text-white/30"
+          >
+            Instrumental
+          </motion.p>
         )}
       </AnimatePresence>
     </div>

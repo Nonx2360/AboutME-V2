@@ -68,6 +68,18 @@ export function useSyncedLyrics(
     return findActiveLyricIndex(lines, displayProgressMs);
   }, [lines, displayProgressMs, synced]);
 
+  const activeWordIndex = useMemo(() => {
+    if (activeIndex === -1) return -1;
+    const line = lines[activeIndex];
+    if (!line?.words || line.words.length === 0) return -1;
+    let idx = -1;
+    for (let i = 0; i < line.words.length; i++) {
+      if (displayProgressMs >= line.words[i].timeMs) idx = i;
+      else break;
+    }
+    return idx;
+  }, [lines, activeIndex, displayProgressMs]);
+
   const activeLine = activeIndex !== -1 ? lines[activeIndex] : null;
   const previousLine = activeIndex > 0 ? lines[activeIndex - 1] : null;
   
@@ -83,6 +95,7 @@ export function useSyncedLyrics(
     previousLine,
     nextLine,
     activeIndex,
+    activeWordIndex,
     hasSyncedLyrics: synced && lines.length > 0,
     hasJapanese: lyricsData?.hasJapanese ?? false,
     loading,

@@ -12,17 +12,21 @@ export type NowPlayingTrack = {
   error?: string;
 };
 
+export type SyncedLyricWord = {
+  timeMs: number;
+  text: string;
+};
+
 export type SyncedLyricLine = {
   timeMs: number;
   text: string;
-  /** Server-computed Hepburn Romaji. null = non-Japanese line. Populated by /api/lyrics. */
   romaji?: string | null;
+  words?: SyncedLyricWord[];
 };
 
 export type LyricsResponse = {
-  source: 'lrclib' | 'local' | 'none';
+  source: 'unison' | 'lrclib' | 'none';
   synced: boolean;
   lines: SyncedLyricLine[];
-  /** True if any line contains Japanese — drives the Romaji toggle visibility. */
   hasJapanese?: boolean;
 };
