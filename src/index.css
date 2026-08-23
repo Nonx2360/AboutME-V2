@@ -51,6 +51,10 @@ body {
   outline-offset: 3px;
 }
 
+/* Hide scrollbar */
+.scrollbar-none::-webkit-scrollbar { display: none; }
+.scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
+
 /* Film grain overlay */
 .noise-overlay {
   position: fixed;

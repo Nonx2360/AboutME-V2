@@ -10,51 +10,27 @@ interface LyricLineStackProps {
   hasJapanese?: boolean;
 }
 
-// Apple Music lyric line height
-const LINE_H = 56;
-const VISIBLE = 7;
-const CENTER = Math.floor(VISIBLE / 2);
+const LINE_H = 72;
 
-function getDistance(i: number, active: number): number {
-  return Math.abs(i - active);
-}
-
-// Apple Music style: active = bright white large, non-active = progressive blur + fade + scale
-function getLineStyle(dist: number) {
-  if (dist === 0) return { opacity: 1,    fontSize: '1.28rem', fontWeight: 700 as const, blur: 0,   scale: 1,    color: '#ffffff' };
-  if (dist === 1) return { opacity: 0.45, fontSize: '1.05rem', fontWeight: 600 as const, blur: 0.3, scale: 0.96, color: 'rgba(255,255,255,0.6)' };
-  if (dist === 2) return { opacity: 0.22, fontSize: '0.95rem', fontWeight: 500 as const, blur: 1.2, scale: 0.92, color: 'rgba(255,255,255,0.3)' };
-  if (dist === 3) return { opacity: 0.08, fontSize: '0.88rem', fontWeight: 500 as const, blur: 2.2, scale: 0.88, color: 'rgba(255,255,255,0.12)' };
-  return              { opacity: 0.02, fontSize: '0.82rem', fontWeight: 400 as const, blur: 4,   scale: 0.85, color: 'rgba(255,255,255,0.03)' };
-}
-
-/**
- * Apple Music word-sync: words smoothly transition from dim to active glow to settled white
- */
 function WordSyncLine({ line, activeWordIndex }: { line: SyncedLyricLine; activeWordIndex: number }) {
   const words = line.words ?? [];
   return (
-    <span className="inline-flex flex-wrap justify-center items-center gap-x-[0.3em] gap-y-1">
+    <span className="inline-flex flex-wrap items-baseline gap-x-[0.35em]">
       {words.map((w, i) => {
         const isPast   = activeWordIndex >= 0 && i < activeWordIndex;
         const isActive = i === activeWordIndex;
-        const isFuture = !isPast && !isActive;
 
         return (
           <span
             key={`${w.timeMs}-${i}`}
             className="inline-block transition-all duration-300 ease-out"
             style={{
-              fontWeight: isActive ? 800 : isPast ? 700 : 600,
-              fontSize: '1.28rem',
-              color: isFuture ? 'rgba(255,255,255,0.22)' : '#ffffff',
+              fontWeight: isActive ? 800 : 700,
+              fontSize: 'inherit',
+              color: isPast ? 'rgba(255,255,255,0.5)' : isActive ? '#ffffff' : 'rgba(255,255,255,0.25)',
               textShadow: isActive
-                ? '0 0 20px rgba(255,255,255,0.7), 0 0 35px rgba(255,255,255,0.3)'
-                : isPast
-                  ? '0 0 8px rgba(255,255,255,0.12)'
-                  : 'none',
-              opacity: isFuture ? 0.35 : 1,
-              transform: isActive ? 'scale(1.04)' : 'scale(1)',
+                ? '0 0 30px rgba(255,255,255,0.5), 0 2px 8px rgba(0,0,0,0.3)'
+                : '0 1px 4px rgba(0,0,0,0.2)',
             }}
           >
             {w.text}
@@ -74,123 +50,115 @@ export function LyricLineStack({
   const reduced = useReducedMotion();
   const [romajiEnabled, setRomajiEnabled] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
-  const lyricsWrapRef = useRef<HTMLDivElement>(null);
+  const linesRef = useRef<(HTMLDivElement | null)[]>([]);
 
   const safeLines = useMemo(() => lines ?? [], [lines]);
 
-  const windowLines = useMemo(() => {
-    if (safeLines.length === 0) return [];
-    const start = Math.max(0, activeIndex - CENTER);
-    const end   = Math.min(safeLines.length, start + VISIBLE);
-    const s     = Math.max(0, end - VISIBLE);
-    return safeLines.slice(s, end);
-  }, [safeLines, activeIndex]);
-
-  const windowStart = useMemo(() => {
-    if (safeLines.length === 0) return 0;
-    const start = Math.max(0, activeIndex - CENTER);
-    const end   = Math.min(safeLines.length, start + VISIBLE);
-    return Math.max(0, end - VISIBLE);
-  }, [safeLines, activeIndex]);
-
-  // Smooth scroll: compute Y position centered with buttery spring ease
+  // Scroll active line into center
   useEffect(() => {
-    if (reduced || !containerRef.current || !lyricsWrapRef.current || windowLines.length === 0) return;
+    if (reduced || activeIndex < 0 || !containerRef.current) return;
 
-    const localActive = activeIndex - windowStart;
-    if (localActive < 0 || localActive >= windowLines.length) return;
+    const container = containerRef.current;
+    const activeEl = linesRef.current[activeIndex];
+    if (!activeEl) return;
 
-    const containerH  = containerRef.current.clientHeight;
-    const centerOffset = (containerH - LINE_H) / 2;
-    const targetY     = -(localActive * LINE_H) + centerOffset;
+    const containerH = container.clientHeight;
+    const targetScroll = activeEl.offsetTop - containerH / 2 + activeEl.offsetHeight / 2;
 
-    lyricsWrapRef.current.animate(
-      [{ transform: `translate3d(0, ${targetY}px, 0)` }],
-      { duration: reduced ? 0 : 600, easing: 'cubic-bezier(0.16, 1, 0.3, 1)', fill: 'forwards' }
-    );
-  }, [activeIndex, windowStart, windowLines.length, reduced]);
+    container.scrollTo({
+      top: targetScroll,
+      behavior: reduced ? 'auto' : 'smooth',
+    });
+  }, [activeIndex, reduced]);
 
-  const containerH = VISIBLE * LINE_H;
+  const isEmpty = safeLines.length === 0;
 
   return (
-    <div className="relative w-full select-none min-h-[220px]">
-      {/* Top fade gradient */}
-      <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-[#121212] via-[#121212]/70 to-transparent z-10 pointer-events-none" />
-      {/* Bottom fade gradient */}
-      <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-[#121212] via-[#121212]/70 to-transparent z-10 pointer-events-none" />
+    <div className="relative w-full select-none min-h-[200px]">
+      {/* Top fade */}
+      <div
+        className="absolute inset-x-0 top-0 h-16 z-10 pointer-events-none"
+        style={{ background: 'linear-gradient(to bottom, #121212 0%, transparent 100%)' }}
+      />
+      {/* Bottom fade */}
+      <div
+        className="absolute inset-x-0 bottom-0 h-16 z-10 pointer-events-none"
+        style={{ background: 'linear-gradient(to top, #121212 0%, transparent 100%)' }}
+      />
 
       {/* Scrollable lyrics area */}
       <div
         ref={containerRef}
-        className="overflow-hidden relative z-0"
-        style={{ height: `${containerH}px` }}
+        className="overflow-y-auto overflow-x-hidden relative z-0 scrollbar-none"
+        style={{ maxHeight: `${LINE_H * 5}px`, scrollBehavior: reduced ? 'auto' : 'smooth' }}
       >
-        <div ref={lyricsWrapRef} style={{ willChange: 'transform' }}>
-          <AnimatePresence mode="popLayout">
-            {windowLines.map((line, i) => {
-              const globalIdx  = windowStart + i;
-              const dist       = getDistance(globalIdx, activeIndex);
-              const style      = getLineStyle(dist);
-              const isActive   = dist === 0;
-              const hasWordSync = isActive && line.words && line.words.length > 1;
+        {/* Top spacer to allow first lines to center */}
+        <div style={{ height: `${LINE_H * 2}px` }} />
 
-              return (
-                <motion.div
-                  key={`${line.timeMs}-${line.text}`}
-                  layout
-                  initial={{ opacity: 0, y: reduced ? 0 : 16 }}
-                  animate={{
-                    opacity: style.opacity,
-                    y: 0,
-                    transition: { duration: 0.6, ease: [0.16, 1, 0.3, 1] },
+        {safeLines.map((line, i) => {
+          const isPast   = i < activeIndex;
+          const isActive = i === activeIndex;
+          const hasWordSync = isActive && line.words && line.words.length > 1;
+
+          return (
+            <div
+              key={`${line.timeMs}-${line.text}`}
+              ref={(el) => { linesRef.current[i] = el; }}
+              className="flex flex-col items-center justify-center w-full transition-all"
+              style={{
+                height: `${LINE_H}px`,
+                opacity: isPast ? 0 : isActive ? 1 : 0.3,
+                transform: isActive ? 'scale(1)' : 'scale(0.97)',
+                transitionProperty: 'opacity, transform',
+                transitionDuration: '0.5s',
+                transitionTimingFunction: 'cubic-bezier(0.16, 1, 0.3, 1)',
+              }}
+            >
+              {hasWordSync ? (
+                <div
+                  className="text-center leading-snug max-w-full w-full"
+                  style={{
+                    fontSize: '1.6rem',
+                    fontWeight: 700,
+                    color: '#ffffff',
+                    textShadow: '0 0 30px rgba(255,255,255,0.3), 0 2px 8px rgba(0,0,0,0.3)',
                   }}
-                  exit={{ opacity: 0, y: reduced ? 0 : -12, transition: { duration: 0.35 } }}
-                  className="flex flex-col items-center justify-center px-4 w-full"
-                  style={{ height: `${LINE_H}px` }}
                 >
-                  {hasWordSync ? (
-                    <div
-                      className="text-center leading-snug max-w-full w-full transition-transform duration-500 ease-out"
-                      style={{
-                        transform: `scale(${style.scale})`,
-                      }}
-                    >
-                      <WordSyncLine line={line} activeWordIndex={activeWordIndex} />
-                    </div>
-                  ) : (
-                    <p
-                      className="text-center leading-snug max-w-full truncate w-full transition-all duration-600 ease-out"
-                      style={{
-                        fontSize: style.fontSize,
-                        fontWeight: style.fontWeight,
-                        color: style.color,
-                        filter: style.blur > 0 ? `blur(${style.blur}px)` : 'none',
-                        transform: `scale(${style.scale})`,
-                        textShadow: isActive ? '0 0 24px rgba(255,255,255,0.4), 0 0 45px rgba(255,255,255,0.15)' : 'none',
-                      }}
-                    >
-                      {line.text}
-                    </p>
-                  )}
+                  <WordSyncLine line={line} activeWordIndex={activeWordIndex} />
+                </div>
+              ) : (
+                <p
+                  className="text-center leading-snug max-w-full truncate w-full"
+                  style={{
+                    fontSize: isActive ? '1.6rem' : '1.3rem',
+                    fontWeight: isActive ? 700 : 500,
+                    color: isActive ? '#ffffff' : 'rgba(255,255,255,0.3)',
+                    textShadow: isActive ? '0 0 30px rgba(255,255,255,0.3), 0 2px 8px rgba(0,0,0,0.3)' : '0 1px 4px rgba(0,0,0,0.2)',
+                  }}
+                >
+                  {line.text}
+                </p>
+              )}
 
-                  <AnimatePresence>
-                    {isActive && romajiEnabled && line.romaji && (
-                      <motion.p
-                        initial={{ opacity: 0, y: 3 }}
-                        animate={{ opacity: 0.75, y: 0, transition: { duration: 0.35, delay: 0.05 } }}
-                        exit={{ opacity: 0, y: -3, transition: { duration: 0.2 } }}
-                        className="text-[10px] font-medium tracking-wider italic mt-0.5"
-                        style={{ color: 'rgba(29,185,84,0.85)' }}
-                      >
-                        {line.romaji}
-                      </motion.p>
-                    )}
-                  </AnimatePresence>
-                </motion.div>
-              );
-            })}
-          </AnimatePresence>
-        </div>
+              <AnimatePresence>
+                {isActive && romajiEnabled && line.romaji && (
+                  <motion.p
+                    initial={{ opacity: 0, y: 3 }}
+                    animate={{ opacity: 0.65, y: 0, transition: { duration: 0.35, delay: 0.05 } }}
+                    exit={{ opacity: 0, y: -3, transition: { duration: 0.2 } }}
+                    className="text-[10px] font-medium tracking-wider italic mt-0.5"
+                    style={{ color: 'rgba(29,185,84,0.8)' }}
+                  >
+                    {line.romaji}
+                  </motion.p>
+                )}
+              </AnimatePresence>
+            </div>
+          );
+        })}
+
+        {/* Bottom spacer to allow last lines to center */}
+        <div style={{ height: `${LINE_H * 2}px` }} />
       </div>
 
       {/* Romaji toggle */}
@@ -219,7 +187,7 @@ export function LyricLineStack({
 
       {/* Instrumental / empty state */}
       <AnimatePresence>
-        {safeLines.length > 0 && activeIndex === -1 && (
+        {!isEmpty && activeIndex === -1 && (
           <motion.p
             initial={{ opacity: 0 }}
             animate={{ opacity: 0.25 }}
@@ -233,4 +201,3 @@ export function LyricLineStack({
     </div>
   );
 }
-
