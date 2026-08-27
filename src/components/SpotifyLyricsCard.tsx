@@ -85,7 +85,7 @@ export function SpotifyLyricsCard({ lanyardSpotify }: SpotifyLyricsCardProps) {
   // Fetch lyrics for the active track
   const {
     activeIndex,
-    activeWordIndex,
+    displayProgressMs: syncedProgressMs,
     hasSyncedLyrics,
     hasJapanese,
     loading: lyricsLoading,
@@ -211,7 +211,7 @@ export function SpotifyLyricsCard({ lanyardSpotify }: SpotifyLyricsCardProps) {
           <LyricLineStack
             lines={lines}
             activeIndex={activeIndex}
-            activeWordIndex={activeWordIndex}
+            displayProgressMs={syncedProgressMs}
             hasJapanese={hasJapanese}
           />
         ) : (

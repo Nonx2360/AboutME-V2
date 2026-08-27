@@ -14,6 +14,7 @@ export type NowPlayingTrack = {
 
 export type SyncedLyricWord = {
   timeMs: number;
+  endMs: number;
   text: string;
 };
 

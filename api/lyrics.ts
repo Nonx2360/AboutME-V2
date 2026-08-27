@@ -37,6 +37,7 @@ interface UnisonLyricsEntry {
 
 type SyncedLyricWord = {
   timeMs: number;
+  endMs: number;
   text: string;
 };
 
@@ -90,7 +91,7 @@ function parseLrc(lrc: string): SyncedLyricLine[] {
 
 function distributeWords(text: string, startMs: number, endMs: number): SyncedLyricWord[] {
   const parts = text.split(/\s+/).filter(Boolean);
-  if (parts.length <= 1) return [{ timeMs: startMs, text }];
+  if (parts.length <= 1) return [{ timeMs: startMs, endMs, text }];
 
   const totalChars = parts.reduce((sum, w) => sum + w.length, 0);
   const duration = endMs - startMs;
@@ -98,8 +99,9 @@ function distributeWords(text: string, startMs: number, endMs: number): SyncedLy
 
   return parts.map((word) => {
     const wordMs = cursor;
-    cursor += (word.length / totalChars) * duration;
-    return { timeMs: wordMs, text: word };
+    const wordEnd = cursor + (word.length / totalChars) * duration;
+    cursor = wordEnd;
+    return { timeMs: wordMs, endMs: wordEnd, text: word };
   });
 }
 
@@ -126,12 +128,12 @@ function parseTtml(xml: string): SyncedLyricLine[] {
     const pContent = paraMatch[2];
 
     // Extract words from spans inside this <p>
-    const wordRegex = /<span[^>]*begin="([^"]*)"[^>]*>([^<]+)<\/span>/g;
+    const wordRegex = /<span[^>]*begin="([^"]*)"[^>]*end="([^"]*)"[^>]*>([^<]+)<\/span>/g;
     const words: SyncedLyricWord[] = [];
     let wMatch;
     while ((wMatch = wordRegex.exec(pContent)) !== null) {
-      const text = wMatch[2].trim();
-      if (text) words.push({ timeMs: parseTtmlTimestamp(wMatch[1]), text });
+      const text = wMatch[3].trim();
+      if (text) words.push({ timeMs: parseTtmlTimestamp(wMatch[1]), endMs: parseTtmlTimestamp(wMatch[2]), text });
     }
 
     const fullText = pContent.replace(/<[^>]+>/g, '').trim();

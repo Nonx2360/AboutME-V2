@@ -6,32 +6,41 @@ import { useState } from 'react';
 interface LyricLineStackProps {
   lines: SyncedLyricLine[];
   activeIndex: number;
-  activeWordIndex: number;
+  displayProgressMs: number;
   hasJapanese?: boolean;
 }
 
 const LINE_H = 72;
 
-function WordSyncLine({ line, activeWordIndex }: { line: SyncedLyricLine; activeWordIndex: number }) {
+function WordSyncLine({ line, displayProgressMs }: { line: SyncedLyricLine; displayProgressMs: number }) {
   const words = line.words ?? [];
   return (
-    <span className="inline-flex flex-wrap items-baseline gap-x-[0.35em]">
+    <span className="inline-flex flex-wrap items-baseline gap-x-[0.28em]">
       {words.map((w, i) => {
-        const isPast   = activeWordIndex >= 0 && i < activeWordIndex;
-        const isActive = i === activeWordIndex;
+        const wordStart = w.timeMs;
+        const wordEnd = w.endMs || wordStart + 300;
+        let progress = 0;
+        if (displayProgressMs >= wordEnd) {
+          progress = 1;
+        } else if (displayProgressMs >= wordStart) {
+          progress = wordEnd > wordStart
+            ? (displayProgressMs - wordStart) / (wordEnd - wordStart)
+            : 1;
+        }
+        const pct = (progress * 100).toFixed(1);
+        const isActive = progress > 0 && progress < 1;
 
         return (
           <span
-            key={`${w.timeMs}-${i}`}
-            className="inline-block transition-all duration-300 ease-out"
+            key={`${wordStart}-${i}`}
+            className="lyric-word inline-block"
             style={{
-              fontWeight: isActive ? 800 : 700,
-              fontSize: 'inherit',
-              color: isPast ? 'rgba(255,255,255,0.5)' : isActive ? '#ffffff' : 'rgba(255,255,255,0.25)',
-              textShadow: isActive
-                ? '0 0 30px rgba(255,255,255,0.5), 0 2px 8px rgba(0,0,0,0.3)'
-                : '0 1px 4px rgba(0,0,0,0.2)',
-            }}
+              '--progress': `${pct}%`,
+              marginRight: '0.28em',
+              transform: isActive ? 'scale(1.03)' : 'scale(1)',
+              filter: isActive ? 'drop-shadow(0 2px 10px rgba(255,255,255,0.25))' : 'none',
+              transition: 'transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.25s ease',
+            } as React.CSSProperties}
           >
             {w.text}
           </span>
@@ -44,7 +53,7 @@ function WordSyncLine({ line, activeWordIndex }: { line: SyncedLyricLine; active
 export function LyricLineStack({
   lines,
   activeIndex,
-  activeWordIndex,
+  displayProgressMs,
   hasJapanese = false,
 }: LyricLineStackProps) {
   const reduced = useReducedMotion();
@@ -124,7 +133,7 @@ export function LyricLineStack({
                     textShadow: '0 0 30px rgba(255,255,255,0.3), 0 2px 8px rgba(0,0,0,0.3)',
                   }}
                 >
-                  <WordSyncLine line={line} activeWordIndex={activeWordIndex} />
+                  <WordSyncLine line={line} displayProgressMs={displayProgressMs} />
                 </div>
               ) : (
                 <p

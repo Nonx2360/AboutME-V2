@@ -96,6 +96,7 @@ export function useSyncedLyrics(
     nextLine,
     activeIndex,
     activeWordIndex,
+    displayProgressMs,
     hasSyncedLyrics: synced && lines.length > 0,
     hasJapanese: lyricsData?.hasJapanese ?? false,
     loading,

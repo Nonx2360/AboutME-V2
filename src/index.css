@@ -55,6 +55,23 @@ body {
 .scrollbar-none::-webkit-scrollbar { display: none; }
 .scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
 
+/* Word-sync gradient fill (SLG style) */
+.lyric-word {
+  position: relative;
+  display: inline-block;
+  background: linear-gradient(
+    to right,
+    #ffffff 0%,
+    #ffffff var(--progress, 0%),
+    rgba(255, 255, 255, 0.28) var(--progress, 0%),
+    rgba(255, 255, 255, 0.28) 100%
+  );
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  white-space: nowrap;
+}
+
 /* Film grain overlay */
 .noise-overlay {
   position: fixed;
