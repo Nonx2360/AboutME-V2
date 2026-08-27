@@ -48,13 +48,13 @@ function WordSyncLine({ line, progressRef }: { line: SyncedLyricLine; progressRe
   }, [words, progressRef]);
 
   return (
-    <span className="inline-flex flex-wrap items-baseline gap-x-[0.28em]">
+    <span className="inline-flex flex-wrap items-baseline" style={{ gap: '0.18em' }}>
       {words.map((w, i) => (
         <span
           key={`${w.timeMs}-${i}`}
           ref={(el) => { spanRefs.current[i] = el; }}
           className="lyric-word inline-block"
-          style={{ marginRight: '0.28em', whiteSpace: 'nowrap', willChange: 'transform, filter' }}
+          style={{ whiteSpace: 'nowrap', willChange: 'transform, filter' }}
         >
           {w.text}
         </span>
