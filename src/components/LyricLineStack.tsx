@@ -12,40 +12,52 @@ interface LyricLineStackProps {
 
 const LINE_H = 72;
 
-function WordSyncLine({ line, displayProgressMs }: { line: SyncedLyricLine; displayProgressMs: number }) {
-  const words = line.words ?? [];
-  return (
-    <span className="inline-flex flex-wrap items-baseline gap-x-[0.28em]">
-      {words.map((w, i) => {
+/**
+ * SLG-style word sync: uses ref + RAF for smooth DOM-level gradient fill
+ * without triggering React re-renders at 60fps.
+ */
+function WordSyncLine({ line, progressRef }: { line: SyncedLyricLine; progressRef: React.RefObject<number> }) {
+  const spanRefs = useRef<(HTMLSpanElement | null)[]>([]);
+  const words = useMemo(() => line.words ?? [], [line.words]);
+
+  useEffect(() => {
+    let rafId: number;
+
+    const tick = () => {
+      const currentProgress = progressRef.current;
+      spanRefs.current.forEach((el, i) => {
+        if (!el) return;
+        const w = words[i];
         const wordStart = w.timeMs;
         const wordEnd = w.endMs || wordStart + 300;
-        let progress = 0;
-        if (displayProgressMs >= wordEnd) {
-          progress = 1;
-        } else if (displayProgressMs >= wordStart) {
-          progress = wordEnd > wordStart
-            ? (displayProgressMs - wordStart) / (wordEnd - wordStart)
-            : 1;
+        let pct = 0;
+        if (currentProgress >= wordEnd) pct = 1;
+        else if (currentProgress >= wordStart) {
+          pct = wordEnd > wordStart ? (currentProgress - wordStart) / (wordEnd - wordStart) : 1;
         }
-        const pct = (progress * 100).toFixed(1);
-        const isActive = progress > 0 && progress < 1;
+        el.style.setProperty('--progress', `${(pct * 100).toFixed(1)}%`);
+        const isActive = pct > 0 && pct < 1;
+        el.style.transform = isActive ? 'scale(1.03)' : 'scale(1)';
+        el.style.filter = isActive ? 'drop-shadow(0 2px 10px rgba(255,255,255,0.25))' : 'none';
+      });
+      rafId = requestAnimationFrame(tick);
+    };
+    rafId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafId);
+  }, [words, progressRef]);
 
-        return (
-          <span
-            key={`${wordStart}-${i}`}
-            className="lyric-word inline-block"
-            style={{
-              '--progress': `${pct}%`,
-              marginRight: '0.28em',
-              transform: isActive ? 'scale(1.03)' : 'scale(1)',
-              filter: isActive ? 'drop-shadow(0 2px 10px rgba(255,255,255,0.25))' : 'none',
-              transition: 'transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.25s ease',
-            } as React.CSSProperties}
-          >
-            {w.text}
-          </span>
-        );
-      })}
+  return (
+    <span className="inline-flex flex-wrap items-baseline gap-x-[0.28em]">
+      {words.map((w, i) => (
+        <span
+          key={`${w.timeMs}-${i}`}
+          ref={(el) => { spanRefs.current[i] = el; }}
+          className="lyric-word inline-block"
+          style={{ marginRight: '0.28em', whiteSpace: 'nowrap', willChange: 'transform, filter' }}
+        >
+          {w.text}
+        </span>
+      ))}
     </span>
   );
 }
@@ -60,6 +72,12 @@ export function LyricLineStack({
   const [romajiEnabled, setRomajiEnabled] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
   const linesRef = useRef<(HTMLDivElement | null)[]>([]);
+  const progressRef = useRef<number>(displayProgressMs);
+
+  // Keep ref in sync without causing re-renders
+  useEffect(() => {
+    progressRef.current = displayProgressMs;
+  });
 
   const safeLines = useMemo(() => lines ?? [], [lines]);
 
@@ -133,7 +151,7 @@ export function LyricLineStack({
                     textShadow: '0 0 30px rgba(255,255,255,0.3), 0 2px 8px rgba(0,0,0,0.3)',
                   }}
                 >
-                  <WordSyncLine line={line} displayProgressMs={displayProgressMs} />
+                  <WordSyncLine line={line} progressRef={progressRef} />
                 </div>
               ) : (
                 <p

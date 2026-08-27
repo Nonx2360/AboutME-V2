@@ -72,22 +72,23 @@ export function useSpotifyNow() {
     const startProgress = Math.min(data.durationMs, data.progressMs + initialOffset);
     setDisplayProgressMs(startProgress);
 
-    // Tick progress smoothly locally
-    const tickInterval = setInterval(() => {
+    // Tick progress smoothly at 60fps using requestAnimationFrame (SLG style)
+    let rafId: number;
+    const tick = () => {
       const offset = Date.now() - data.fetchedAt;
       const currentProgress = data.progressMs + offset;
       
       if (currentProgress >= data.durationMs) {
         setDisplayProgressMs(data.durationMs);
-        clearInterval(tickInterval);
-        // Song might have transitioned, fetch new status immediately
         fetchData(false);
       } else {
         setDisplayProgressMs(currentProgress);
+        rafId = requestAnimationFrame(tick);
       }
-    }, 100); // 10 ticks per second is plenty for smooth bar & lyrics sync
+    };
+    rafId = requestAnimationFrame(tick);
 
-    return () => clearInterval(tickInterval);
+    return () => cancelAnimationFrame(rafId);
   }, [data]);
 
   // Refetch immediately when tab regains visibility
