@@ -7,6 +7,7 @@ interface LyricLineStackProps {
   lines: SyncedLyricLine[];
   activeIndex: number;
   displayProgressMs: number;
+  albumArtUrl?: string;
   hasJapanese?: boolean;
 }
 
@@ -66,6 +67,7 @@ export function LyricLineStack({
   lines,
   activeIndex,
   displayProgressMs,
+  albumArtUrl,
   hasJapanese = false,
 }: LyricLineStackProps) {
   const reduced = useReducedMotion();
@@ -101,16 +103,29 @@ export function LyricLineStack({
   const isEmpty = safeLines.length === 0;
 
   return (
-    <div className="relative w-full select-none min-h-[200px]">
+    <div className="relative w-full select-none min-h-[200px] rounded-2xl overflow-hidden">
+      {/* Blurred album art background */}
+      {albumArtUrl && (
+        <div className="absolute inset-0 z-0">
+          <img
+            src={albumArtUrl}
+            alt=""
+            className="w-full h-full object-cover scale-110"
+            style={{ filter: 'blur(40px) brightness(0.35) saturate(1.4)' }}
+          />
+          <div className="absolute inset-0 bg-black/40" />
+        </div>
+      )}
+
       {/* Top fade */}
       <div
         className="absolute inset-x-0 top-0 h-16 z-10 pointer-events-none"
-        style={{ background: 'linear-gradient(to bottom, #121212 0%, transparent 100%)' }}
+        style={{ background: 'linear-gradient(to bottom, rgba(18,18,18,0.9) 0%, transparent 100%)' }}
       />
       {/* Bottom fade */}
       <div
         className="absolute inset-x-0 bottom-0 h-16 z-10 pointer-events-none"
-        style={{ background: 'linear-gradient(to top, #121212 0%, transparent 100%)' }}
+        style={{ background: 'linear-gradient(to top, rgba(18,18,18,0.9) 0%, transparent 100%)' }}
       />
 
       {/* Scrollable lyrics area */}
@@ -215,14 +230,17 @@ export function LyricLineStack({
       {/* Instrumental / empty state */}
       <AnimatePresence>
         {!isEmpty && activeIndex === -1 && (
-          <motion.p
+          <motion.div
             initial={{ opacity: 0 }}
-            animate={{ opacity: 0.25 }}
+            animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 flex items-center justify-center text-sm font-serif italic text-white/30"
+            className="absolute inset-0 flex flex-col items-center justify-center z-20 gap-3"
           >
-            Instrumental
-          </motion.p>
+            <div className="text-4xl opacity-30">♪</div>
+            <p className="text-sm font-serif italic text-white/40 tracking-wide">
+              Instrumental
+            </p>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>

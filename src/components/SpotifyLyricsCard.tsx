@@ -212,6 +212,7 @@ export function SpotifyLyricsCard({ lanyardSpotify }: SpotifyLyricsCardProps) {
             lines={lines}
             activeIndex={activeIndex}
             displayProgressMs={syncedProgressMs}
+            albumArtUrl={track.albumArtUrl}
             hasJapanese={hasJapanese}
           />
         ) : (
