@@ -127,13 +127,24 @@ function parseTtml(xml: string): SyncedLyricLine[] {
     const pBegin = parseTtmlTimestamp(paraMatch[1]);
     const pContent = paraMatch[2];
 
-    // Extract words from spans inside this <p>
-    const wordRegex = /<span[^>]*begin="([^"]*)"[^>]*end="([^"]*)"[^>]*>([^<]+)<\/span>/g;
+    // Extract words from spans inside this <p> (SLG-style: merge spans without gaps)
+    const wordRegex = /<span[^>]*begin="([^"]*)"[^>]*end="([^"]*)"[^>]*>([\s\S]*?)<\/span>/g;
     const words: SyncedLyricWord[] = [];
+    let lastEnd = 0;
     let wMatch;
     while ((wMatch = wordRegex.exec(pContent)) !== null) {
+      const gap = pContent.slice(lastEnd, wMatch.index);
       const text = wMatch[3].trim();
-      if (text) words.push({ timeMs: parseTtmlTimestamp(wMatch[1]), endMs: parseTtmlTimestamp(wMatch[2]), text });
+      if (text) {
+        if (words.length > 0 && !/\s/.test(gap)) {
+          // No whitespace between spans — merge into previous word
+          words[words.length - 1].text += text;
+          words[words.length - 1].endMs = parseTtmlTimestamp(wMatch[2]);
+        } else {
+          words.push({ timeMs: parseTtmlTimestamp(wMatch[1]), endMs: parseTtmlTimestamp(wMatch[2]), text });
+        }
+      }
+      lastEnd = wordRegex.lastIndex;
     }
 
     const fullText = pContent.replace(/<[^>]+>/g, '').trim();
