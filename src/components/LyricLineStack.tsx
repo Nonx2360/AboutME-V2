@@ -14,35 +14,50 @@ interface LyricLineStackProps {
 const LINE_H = 72;
 
 /**
- * SLG-style word sync: uses ref + RAF for smooth DOM-level gradient fill
- * without triggering React re-renders at 60fps.
+ * Max-FPS word sync: single shared RAF loop, GPU-only properties, skip unchanged.
+ * Each word span gets direct DOM updates — no React re-renders at 60fps.
  */
 function WordSyncLine({ line, progressRef }: { line: SyncedLyricLine; progressRef: React.RefObject<number> }) {
   const spanRefs = useRef<(HTMLSpanElement | null)[]>([]);
+  const prevPcts = useRef<number[]>([]);
   const words = useMemo(() => line.words ?? [], [line.words]);
 
   useEffect(() => {
     let rafId: number;
 
     const tick = () => {
-      const currentProgress = progressRef.current;
-      spanRefs.current.forEach((el, i) => {
-        if (!el) return;
+      const now = progressRef.current;
+      const spans = spanRefs.current;
+      const prev = prevPcts.current;
+
+      for (let i = 0; i < spans.length; i++) {
+        const el = spans[i];
+        if (!el) continue;
         const w = words[i];
-        const wordStart = w.timeMs;
-        const wordEnd = w.endMs || wordStart + 300;
-        let pct = 0;
-        if (currentProgress >= wordEnd) pct = 1;
-        else if (currentProgress >= wordStart) {
-          pct = wordEnd > wordStart ? (currentProgress - wordStart) / (wordEnd - wordStart) : 1;
-        }
-        el.style.setProperty('--progress', `${(pct * 100).toFixed(1)}%`);
-        const isActive = pct > 0 && pct < 1;
-        el.style.transform = isActive ? 'scale(1.03)' : 'scale(1)';
-        el.style.filter = isActive ? 'drop-shadow(0 2px 10px rgba(255,255,255,0.25))' : 'none';
-      });
+        const wordEnd = w.endMs || w.timeMs + 300;
+        const duration = wordEnd - w.timeMs;
+
+        let pct: number;
+        if (now >= wordEnd) pct = 100;
+        else if (now <= w.timeMs) pct = 0;
+        else pct = duration > 0 ? ((now - w.timeMs) / duration) * 100 : 100;
+
+        // Skip if unchanged (round to 0.5% to avoid micro-jitter)
+        const rounded = Math.round(pct * 2) / 2;
+        if (prev[i] === rounded) continue;
+        prev[i] = rounded;
+
+        // Single style write — gradient via CSS var, GPU-composited transform
+        el.style.setProperty('--progress', `${rounded.toFixed(1)}%`);
+        const active = rounded > 0 && rounded < 100;
+        el.style.transform = active ? 'scale(1.03)' : '';
+      }
+
       rafId = requestAnimationFrame(tick);
     };
+
+    // Init prev array
+    prevPcts.current = new Array(words.length).fill(-1);
     rafId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafId);
   }, [words, progressRef]);
@@ -54,7 +69,7 @@ function WordSyncLine({ line, progressRef }: { line: SyncedLyricLine; progressRe
           key={`${w.timeMs}-${i}`}
           ref={(el) => { spanRefs.current[i] = el; }}
           className="lyric-word inline-block"
-          style={{ whiteSpace: 'nowrap', willChange: 'transform, filter' }}
+          style={{ whiteSpace: 'nowrap' }}
         >
           {w.text}
         </span>
@@ -76,7 +91,6 @@ export function LyricLineStack({
   const linesRef = useRef<(HTMLDivElement | null)[]>([]);
   const progressRef = useRef<number>(displayProgressMs);
 
-  // Keep ref in sync without causing re-renders
   useEffect(() => {
     progressRef.current = displayProgressMs;
   });

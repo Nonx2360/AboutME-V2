@@ -55,7 +55,7 @@ body {
 .scrollbar-none::-webkit-scrollbar { display: none; }
 .scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
 
-/* Word-sync gradient fill (SLG style) */
+/* Word-sync gradient fill (SLG style, GPU-optimized) */
 .lyric-word {
   position: relative;
   display: inline-block;
@@ -70,6 +70,8 @@ body {
   -webkit-text-fill-color: transparent;
   background-clip: text;
   white-space: nowrap;
+  will-change: transform;
+  contain: layout style;
 }
 
 /* Film grain overlay */
