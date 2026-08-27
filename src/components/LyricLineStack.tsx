@@ -42,15 +42,17 @@ function WordSyncLine({ line, progressRef }: { line: SyncedLyricLine; progressRe
         else if (now <= w.timeMs) pct = 0;
         else pct = duration > 0 ? ((now - w.timeMs) / duration) * 100 : 100;
 
-        // Skip if unchanged (round to 0.5% to avoid micro-jitter)
-        const rounded = Math.round(pct * 2) / 2;
+        // Skip if unchanged (round to 0.1% for smooth gradient)
+        const rounded = Math.round(pct * 10) / 10;
         if (prev[i] === rounded) continue;
         prev[i] = rounded;
 
-        // Single style write — gradient via CSS var, GPU-composited transform
+        // Only update gradient — class toggle handles scale/shadow
         el.style.setProperty('--progress', `${rounded.toFixed(1)}%`);
+
+        // Toggle active class (CSS transition handles the animation)
         const active = rounded > 0 && rounded < 100;
-        el.style.transform = active ? 'scale(1.03)' : '';
+        el.classList.toggle('active', active);
       }
 
       rafId = requestAnimationFrame(tick);
