@@ -53,11 +53,23 @@ export function LyricLineStack({
   // Drive the engine clock. Braccato reads seconds; we track milliseconds.
   useEffect(() => {
     let frame: number;
+    let lastTime = -1;
+    let lastPlaying: boolean | null = null;
     const tick = () => {
       const el = viewRef.current;
       if (el) {
-        el.currentTime = progressRef.current / 1000;
-        el.playing = playingRef.current;
+        const next = progressRef.current / 1000;
+        // Each property write re-renders the whole view, and `playing` only
+        // changes on pause/resume. Writing both every frame doubles that cost
+        // for no benefit, so skip no-op writes.
+        if (next !== lastTime) {
+          lastTime = next;
+          el.currentTime = next;
+        }
+        if (playingRef.current !== lastPlaying) {
+          lastPlaying = playingRef.current;
+          el.playing = lastPlaying;
+        }
       }
       frame = requestAnimationFrame(tick);
     };

@@ -6,6 +6,14 @@ export function useSpotifyNow() {
   const [displayProgressMs, setDisplayProgressMs] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(true);
   const lastValidTrackRef = useRef<NowPlayingTrack | null>(null);
+  /**
+   * Highest progress this hook has shown for the current track. Playback never
+   * runs backwards, and neither should the clock we hand the renderer: a poll
+   * whose reported progress lags the local tick would otherwise rewind it and
+   * make already-sung words flip back and replay their highlight.
+   */
+  const highWaterRef = useRef<number>(0);
+  const trackIdRef = useRef<string>('');
 
   const fetchData = async (isFirstFetch = false) => {
     try {
@@ -67,9 +75,24 @@ export function useSpotifyNow() {
       return;
     }
 
+    // A different track restarts the clock from zero; seeking or looping the
+    // same track is not something the API exposes, so treat one trackId as
+    // one continuous playthrough.
+    if (trackIdRef.current !== data.trackId) {
+      trackIdRef.current = data.trackId;
+      highWaterRef.current = 0;
+    }
+
     // Set initial display progress with network/processing delay offset
     const initialOffset = Date.now() - data.fetchedAt;
-    const startProgress = Math.min(data.durationMs, data.progressMs + initialOffset);
+    const reported = data.progressMs + initialOffset;
+
+    // Never rewind: a fresh poll can report a progress_ms that sits behind the
+    // local clock, because Spotify's value is quantized and sampled when the
+    // request was made. Rewinding makes words flip back from "sung" to
+    // "unsung" and replay their highlight animation, which reads as a blink.
+    const startProgress = Math.min(data.durationMs, Math.max(reported, highWaterRef.current));
+    highWaterRef.current = startProgress;
     setDisplayProgressMs(startProgress);
 
     // Tick progress smoothly at 60fps using requestAnimationFrame (SLG style)
@@ -77,12 +100,17 @@ export function useSpotifyNow() {
     const tick = () => {
       const offset = Date.now() - data.fetchedAt;
       const currentProgress = data.progressMs + offset;
-      
+
       if (currentProgress >= data.durationMs) {
         setDisplayProgressMs(data.durationMs);
         fetchData(false);
       } else {
-        setDisplayProgressMs(currentProgress);
+        const next = Math.min(
+          data.durationMs,
+          Math.max(currentProgress, highWaterRef.current)
+        );
+        highWaterRef.current = next;
+        setDisplayProgressMs(next);
         rafId = requestAnimationFrame(tick);
       }
     };
