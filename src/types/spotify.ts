@@ -26,7 +26,7 @@ export type SyncedLyricLine = {
 };
 
 export type LyricsResponse = {
-  source: 'unison' | 'lrclib' | 'none';
+  source: 'unison' | 'betterlyrics' | 'lrclib' | 'none';
   synced: boolean;
   lines: SyncedLyricLine[];
   hasJapanese?: boolean;

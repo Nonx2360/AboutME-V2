@@ -49,7 +49,7 @@ type SyncedLyricLine = {
 };
 
 type LyricsResponse = {
-  source: 'unison' | 'lrclib' | 'none';
+  source: 'unison' | 'betterlyrics' | 'lrclib' | 'none';
   synced: boolean;
   lines: SyncedLyricLine[];
   hasJapanese?: boolean;
@@ -58,6 +58,7 @@ type LyricsResponse = {
 const cache = new Map<string, LyricsResponse>();
 
 const UNISON_BASE = 'https://unison.boidu.dev';
+const BETTERLYRICS_BASE = 'https://api.betterlyrics.org';
 
 /* ── LRC Parser ──────────────────────────────────────────────────────── */
 
@@ -107,14 +108,24 @@ function distributeWords(text: string, startMs: number, endMs: number): SyncedLy
 
 /* ── TTML Parser ─────────────────────────────────────────────────────── */
 
+/**
+ * TTML `begin`/`end` values come in three shapes:
+ *   "00:00:18.234"  hours:minutes:seconds  (Unison)
+ *   "1:16.656"      minutes:seconds         (Unison)
+ *   "12.345"        bare seconds            (BetterLyrics)
+ * Providers disagree, so all three must be accepted.
+ */
 function parseTtmlTimestamp(ts: string): number {
   if (!ts) return 0;
   const m = ts.match(/(?:(\d+):)?(\d+):(\d+(?:\.\d+)?)/);
-  if (!m) return 0;
-  const hours = parseInt(m[1] || '0', 10);
-  const minutes = parseInt(m[2], 10);
-  const seconds = parseFloat(m[3]);
-  return (hours * 3600 + minutes * 60 + seconds) * 1000;
+  if (m) {
+    const hours = parseInt(m[1] || '0', 10);
+    const minutes = parseInt(m[2], 10);
+    const seconds = parseFloat(m[3]);
+    return (hours * 3600 + minutes * 60 + seconds) * 1000;
+  }
+  const bareSeconds = parseFloat(ts);
+  return Number.isFinite(bareSeconds) ? Math.round(bareSeconds * 1000) : 0;
 }
 
 function parseTtml(xml: string): SyncedLyricLine[] {
@@ -218,6 +229,59 @@ async function fetchFromUnison(
   }
 }
 
+/* ── BetterLyrics ────────────────────────────────────────────────────── */
+
+/**
+ * BetterLyrics serves syllable-synced TTML. Access is cache-first: cached
+ * songs are free and keyless, while an uncached query returns 401 unless an
+ * optional API key is supplied (keys are currently not being issued).
+ *
+ * All four params must be sent because album + duration are part of the
+ * remote cache key — omitting them causes cache misses, not matches.
+ */
+async function fetchFromBetterLyrics(
+  song: string,
+  artist: string,
+  album: string,
+  durationMs: string
+): Promise<LyricsResponse | null> {
+  try {
+    const durationSec = durationMs ? Math.round(parseInt(durationMs, 10) / 1000) : 0;
+    const params = new URLSearchParams({ s: song, a: artist, al: album });
+    if (durationSec > 0) params.set('d', durationSec.toString());
+
+    const headers: Record<string, string> = {
+      'User-Agent': 'AboutMeLiveLyrics/2.0 (https://github.com/nonx2360/AboutME-V2)',
+    };
+    const apiKey = process.env.BETTERLYRICS_API_KEY;
+    if (apiKey) headers['X-API-Key'] = apiKey;
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+
+    const res = await fetch(`${BETTERLYRICS_BASE}/getLyrics?${params}`, {
+      headers,
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+
+    // 401 = uncached without key, 404 = no lyrics, 429 = rate limited.
+    // All are non-fatal: the caller simply falls through to the next provider.
+    if (!res.ok) return null;
+
+    const body = await res.json() as { ttml?: string };
+    if (!body.ttml) return null;
+
+    const lines = parseTtml(body.ttml);
+    if (lines.length === 0) return null;
+
+    return { source: 'betterlyrics', synced: true, lines, hasJapanese: false };
+  } catch (err) {
+    console.error('[lyrics] BetterLyrics fetch failed:', err);
+    return null;
+  }
+}
+
 /* ── LRCLIB ──────────────────────────────────────────────────────────── */
 
 async function fetchFromLrclib(
@@ -287,6 +351,20 @@ async function enrichWithRomaji(
 
 const EMPTY: LyricsResponse = { source: 'none', synced: false, lines: [], hasJapanese: false };
 
+/** Enriches with romaji, caches, and writes the response. */
+async function respondWith(
+  res: VercelResponse,
+  trackId: string,
+  result: LyricsResponse
+): Promise<LyricsResponse> {
+  const { enriched, hasJapanese } = await enrichWithRomaji(result.lines);
+  const payload: LyricsResponse = { ...result, lines: enriched, hasJapanese };
+  cache.set(trackId, payload);
+  res.setHeader('Cache-Control', 'public, max-age=3600, stale-while-revalidate=600');
+  res.status(200).json(payload);
+  return payload;
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -332,22 +410,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       : null;
 
     if (unisonResult) {
-      const { enriched, hasJapanese } = await enrichWithRomaji(unisonResult.lines);
-      const result: LyricsResponse = { ...unisonResult, lines: enriched, hasJapanese };
-      cache.set(trackId, result);
-      res.setHeader('Cache-Control', 'public, max-age=3600, stale-while-revalidate=600');
-      return res.status(200).json(result);
+      return respondWith(res, trackId, unisonResult);
     }
 
-    // 2. Fallback to LRCLIB
+    // 2. Fall back to BetterLyrics — also TTML, so real word timing is preserved
+    const betterLyricsResult = track && artist
+      ? await fetchFromBetterLyrics(track, artist, album || '', durationMs || '')
+      : null;
+
+    if (betterLyricsResult) {
+      return respondWith(res, trackId, betterLyricsResult);
+    }
+
+    // 3. Last resort: LRCLIB (line-level LRC, word timing interpolated)
     const lrclibResult = await fetchFromLrclib(track || '', artist || '', album || '', durationMs || '');
 
     if (lrclibResult) {
-      const { enriched, hasJapanese } = await enrichWithRomaji(lrclibResult.lines);
-      const result: LyricsResponse = { ...lrclibResult, lines: enriched, hasJapanese };
-      cache.set(trackId, result);
-      res.setHeader('Cache-Control', 'public, max-age=3600, stale-while-revalidate=600');
-      return res.status(200).json(result);
+      return respondWith(res, trackId, lrclibResult);
     }
 
     cache.set(trackId, EMPTY);
