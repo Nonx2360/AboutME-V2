@@ -105,7 +105,6 @@ const Navbar = () => {
           className="flex items-center gap-3 group cursor-pointer"
           aria-label="Scroll to top"
         >
-          <div className="w-3 h-3 rounded-full bg-accent group-hover:scale-125 transition-transform glow-accent" />
           <span className="hidden sm:block font-sans text-[10px] font-black uppercase tracking-[0.4em] text-white/30 group-hover:text-white transition-colors">
             Nonx2
           </span>
