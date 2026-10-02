@@ -1,7 +1,13 @@
 import { useEffect, useState, useMemo } from 'react';
 import type { LyricsResponse } from '../types/spotify';
-import { findActiveLyricIndex } from '../utils/lyrics';
 
+/**
+ * Fetches parsed lyrics for the active track.
+ *
+ * Braccato owns active-line and active-word tracking, so this hook only reports
+ * what the card still needs: whether synced lyrics exist, where they came from,
+ * and the clock the renderer follows.
+ */
 export function useSyncedLyrics(
   trackId: string | undefined,
   song: string | undefined,
@@ -63,42 +69,12 @@ export function useSyncedLyrics(
   const lines = useMemo(() => lyricsData?.lines || [], [lyricsData]);
   const synced = lyricsData?.synced || false;
 
-  const activeIndex = useMemo(() => {
-    if (!synced || lines.length === 0) return -1;
-    return findActiveLyricIndex(lines, displayProgressMs);
-  }, [lines, displayProgressMs, synced]);
-
-  const activeWordIndex = useMemo(() => {
-    if (activeIndex === -1) return -1;
-    const line = lines[activeIndex];
-    if (!line?.words || line.words.length === 0) return -1;
-    let idx = -1;
-    for (let i = 0; i < line.words.length; i++) {
-      if (displayProgressMs >= line.words[i].timeMs) idx = i;
-      else break;
-    }
-    return idx;
-  }, [lines, activeIndex, displayProgressMs]);
-
-  const activeLine = activeIndex !== -1 ? lines[activeIndex] : null;
-  const previousLine = activeIndex > 0 ? lines[activeIndex - 1] : null;
-  
-  const nextLine = useMemo(() => {
-    if (lines.length === 0) return null;
-    if (activeIndex === -1) return lines[0];
-    if (activeIndex < lines.length - 1) return lines[activeIndex + 1];
-    return null;
-  }, [lines, activeIndex]);
+  const hasJapanese = lyricsData?.hasJapanese ?? false;
 
   return {
-    activeLine,
-    previousLine,
-    nextLine,
-    activeIndex,
-    activeWordIndex,
     displayProgressMs,
     hasSyncedLyrics: synced && lines.length > 0,
-    hasJapanese: lyricsData?.hasJapanese ?? false,
+    hasJapanese,
     loading,
     lines,
     source: lyricsData?.source || 'none',

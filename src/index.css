@@ -79,6 +79,32 @@ body {
   filter: drop-shadow(0 2px 10px rgba(255, 255, 255, 0.25));
 }
 
+/* Braccato lyrics host
+   The element renders into light DOM, so these rules reach its lines directly. */
+.lyrics-host .blyrics-container {
+  /* The renderer measures the top padding needed to reach the scroll position,
+     but lyrics.css only ships the bottom half. */
+  padding-top: var(--blyrics-padding-top, 2rem);
+  font-family: var(--font-sans);
+}
+
+/* Romaji toggle is handled in JSX; hide the engine's romanization line when off */
+.lyrics-hide-romanization .blyrics--romanized {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lyrics-host {
+    --blyrics-animate-line-scale: 0;
+    --blyrics-animate-word-wobble: 0;
+    --blyrics-animate-highlight-swipe: 0;
+    --blyrics-animate-highlight-glow: 0;
+    --blyrics-animate-highlight-fade: 0;
+    --blyrics-animate-scroll: 0;
+    --blyrics-animate-instrumental: 0;
+  }
+}
+
 /* Film grain overlay */
 .noise-overlay {
   position: fixed;

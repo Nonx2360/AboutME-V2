@@ -1,99 +1,83 @@
-import { useRef, useEffect, useMemo } from 'react';
-import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
-import type { SyncedLyricLine } from '../types/spotify';
-import { useState } from 'react';
+import { useRef, useEffect, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import type { Lyric } from '@braccato/types';
+import type { BraccatoView } from '../types/spotify';
+import '@braccato/core/element';
+import '@braccato/core/styles/variables.css';
+import '@braccato/core/styles/lyrics.css';
+import '@braccato/core/styles/instrumental.css';
 
 interface LyricLineStackProps {
-  lines: SyncedLyricLine[];
-  activeIndex: number;
+  lines: Lyric[];
   displayProgressMs: number;
+  isPlaying?: boolean;
   albumArtUrl?: string;
   hasJapanese?: boolean;
 }
 
 /**
- * SLG-style: show only the current active line with word-by-word gradient fill.
- * No scrolling, no upcoming lines — just one line at a time.
+ * Renders synced lyrics with the Braccato engine — the same renderer behind
+ * the Better Lyrics browser extension.
+ *
+ * Braccato owns the DOM, so the clock is written straight onto the element each
+ * frame instead of round-tripping through React state. The parent already
+ * ticks `displayProgressMs` at 60fps, and re-rendering this subtree that often
+ * would fight the engine's own per-frame layout work.
  */
-function WordSyncLine({ line, progressRef }: { line: SyncedLyricLine; progressRef: React.RefObject<number> }) {
-  const spanRefs = useRef<(HTMLSpanElement | null)[]>([]);
-  const prevPcts = useRef<number[]>([]);
-  const words = useMemo(() => line.words ?? [], [line.words]);
-
-  useEffect(() => {
-    let rafId: number;
-
-    const tick = () => {
-      const now = progressRef.current;
-      const spans = spanRefs.current;
-      const prev = prevPcts.current;
-
-      for (let i = 0; i < spans.length; i++) {
-        const el = spans[i];
-        if (!el) continue;
-        const w = words[i];
-        const wordEnd = w.endMs || w.timeMs + 300;
-        const duration = wordEnd - w.timeMs;
-
-        let pct: number;
-        if (now >= wordEnd) pct = 100;
-        else if (now <= w.timeMs) pct = 0;
-        else pct = duration > 0 ? ((now - w.timeMs) / duration) * 100 : 100;
-
-        const rounded = Math.round(pct * 10) / 10;
-        if (prev[i] === rounded) continue;
-        prev[i] = rounded;
-
-        el.style.setProperty('--progress', `${rounded.toFixed(1)}%`);
-        el.classList.toggle('active', rounded > 0 && rounded < 100);
-      }
-
-      rafId = requestAnimationFrame(tick);
-    };
-
-    prevPcts.current = new Array(words.length).fill(-1);
-    rafId = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(rafId);
-  }, [words, progressRef]);
-
-  return (
-    <span className="inline-flex flex-wrap items-baseline" style={{ gap: '0.18em' }}>
-      {words.map((w, i) => (
-        <span
-          key={`${w.timeMs}-${i}`}
-          ref={(el) => { spanRefs.current[i] = el; }}
-          className="lyric-word inline-block"
-          style={{ whiteSpace: 'nowrap' }}
-        >
-          {w.text}
-        </span>
-      ))}
-    </span>
-  );
-}
-
 export function LyricLineStack({
   lines,
-  activeIndex,
   displayProgressMs,
+  isPlaying = false,
   albumArtUrl,
   hasJapanese = false,
 }: LyricLineStackProps) {
-  const reduced = useReducedMotion();
   const [romajiEnabled, setRomajiEnabled] = useState(true);
-  const progressRef = useRef<number>(displayProgressMs);
+  const viewRef = useRef<BraccatoView | null>(null);
 
+  const progressRef = useRef(displayProgressMs);
+  const playingRef = useRef(isPlaying);
+
+  // Mirror the latest props into refs so the frame loop below never has to be
+  // torn down and rebuilt when the parent re-renders.
   useEffect(() => {
     progressRef.current = displayProgressMs;
-  });
+    playingRef.current = isPlaying;
+  }, [displayProgressMs, isPlaying]);
 
-  const safeLines = useMemo(() => lines ?? [], [lines]);
-  const activeLine = activeIndex >= 0 && activeIndex < safeLines.length ? safeLines[activeIndex] : null;
-  const hasWordSync = activeLine?.words && activeLine.words.length > 1;
-  const isEmpty = safeLines.length === 0;
+  // Parsing happens server-side, so this is just a hand-off of structured data.
+  useEffect(() => {
+    const el = viewRef.current;
+    if (el) el.lyrics = lines.length > 0 ? lines : null;
+  }, [lines]);
+
+  // Drive the engine clock. Braccato reads seconds; we track milliseconds.
+  useEffect(() => {
+    let frame: number;
+    const tick = () => {
+      const el = viewRef.current;
+      if (el) {
+        el.currentTime = progressRef.current / 1000;
+        el.playing = playingRef.current;
+      }
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, []);
+
+  // Autoscroll keeps yanking the view back unless we tell it the user scrolled.
+  useEffect(() => {
+    const el = viewRef.current;
+    if (!el) return;
+    const noteUserScroll = () => el.renderer?.noteUserScroll();
+    el.addEventListener('scroll', noteUserScroll, { passive: true });
+    return () => el.removeEventListener('scroll', noteUserScroll);
+  }, []);
+
+  const hasRomanization = lines.some(l => l.romanization);
 
   return (
-    <div className="relative w-full select-none min-h-[200px] rounded-2xl overflow-hidden">
+    <div className="relative w-full select-none rounded-2xl overflow-hidden">
       {/* Blurred album art background */}
       {albumArtUrl && (
         <div className="absolute inset-0 z-0">
@@ -107,59 +91,24 @@ export function LyricLineStack({
         </div>
       )}
 
-      {/* Lyrics area — single centered line */}
-      <div className="relative z-10 flex items-center justify-center min-h-[200px] px-6">
-        <AnimatePresence mode="wait">
-          {activeLine ? (
-            <motion.div
-              key={`${activeLine.timeMs}-${activeLine.text}`}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -12 }}
-              transition={{ duration: reduced ? 0 : 0.3, ease: [0.16, 1, 0.3, 1] }}
-              className="text-center leading-snug max-w-full"
-              style={{
-                fontSize: '1.6rem',
-                fontWeight: 700,
-                color: '#ffffff',
-                textShadow: '0 0 30px rgba(255,255,255,0.3), 0 2px 8px rgba(0,0,0,0.3)',
-              }}
-            >
-              {hasWordSync ? (
-                <WordSyncLine line={activeLine} progressRef={progressRef} />
-              ) : (
-                activeLine.text
-              )}
-
-              {romajiEnabled && activeLine.romaji && (
-                <p
-                  className="text-[10px] font-medium tracking-wider italic mt-1.5"
-                  style={{ color: 'rgba(29,185,84,0.7)' }}
-                >
-                  {activeLine.romaji}
-                </p>
-              )}
-            </motion.div>
-          ) : (
-            <motion.div
-              key="empty"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="flex flex-col items-center gap-3"
-            >
-              <div className="text-4xl opacity-30">♪</div>
-              <p className="text-sm font-serif italic text-white/40 tracking-wide">
-                {isEmpty ? 'No lyrics available' : 'Instrumental'}
-              </p>
-            </motion.div>
-          )}
-        </AnimatePresence>
+      {/* Lyrics area — the engine scrolls the active line to centre stage */}
+      <div className="relative z-10 min-h-[200px]">
+        <braccato-lyrics
+          ref={viewRef}
+          className={romajiEnabled ? 'lyrics-host' : 'lyrics-host lyrics-hide-romanization'}
+          style={{
+            display: 'block',
+            height: 200,
+            overflowY: 'auto',
+            '--blyrics-font-size': '1.6rem',
+            '--blyrics-lyric-active-color': '#ffffff',
+          } as React.CSSProperties}
+        />
       </div>
 
-      {/* Romaji toggle */}
+      {/* Romaji toggle — Braccato renders the romanization line itself */}
       <AnimatePresence>
-        {hasJapanese && activeLine?.romaji && (
+        {hasJapanese && hasRomanization && (
           <motion.button
             key="romaji-toggle"
             initial={{ opacity: 0, y: 4 }}

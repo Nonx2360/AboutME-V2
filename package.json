@@ -10,6 +10,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@braccato/core": "^1.16.3",
+    "@braccato/parsers": "^0.3.2",
+    "@braccato/types": "^1.0.0",
     "@gsap/react": "^2.1.2",
     "@tailwindcss/vite": "^4.2.2",
     "framer-motion": "^12.38.0",

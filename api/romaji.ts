@@ -34,9 +34,20 @@ async function ensureInit(): Promise<void> {
 
   if (!initPromise) {
     initPromise = (async () => {
-      // Dynamic imports keep Vite from bundling these CJS-only packages
-      const { default: Kuroshiro } = await import('kuroshiro');
-      const { default: KuromojiAnalyzer } = await import('kuroshiro-analyzer-kuromoji');
+      // Dynamic imports keep Vite from bundling these CJS-only packages.
+      // Their interop shape differs by bundler and runtime, so unwrap
+      // defensively instead of assuming `default` is the constructor.
+      const kuroshiroMod = await import('kuroshiro');
+      const analyzerMod = await import('kuroshiro-analyzer-kuromoji');
+
+      const Kuroshiro = unwrapDefault<new (options?: unknown) => KuroshiroInstance>(
+        kuroshiroMod
+      );
+      const KuromojiAnalyzer = unwrapDefault<new () => unknown>(analyzerMod);
+
+      if (typeof Kuroshiro !== 'function' || typeof KuromojiAnalyzer !== 'function') {
+        throw new Error('kuroshiro interop failed to yield constructors');
+      }
 
       const instance = new Kuroshiro();
       await instance.init(new KuromojiAnalyzer());
@@ -45,6 +56,23 @@ async function ensureInit(): Promise<void> {
   }
 
   await initPromise;
+}
+
+/**
+ * Resolves the actual constructor from a dynamic import of a CJS module.
+ *
+ * Depending on the bundler and runtime the constructor ends up at
+ * `mod.default`, `mod.default.default`, or under a named export, so walk the
+ * common shapes before giving up.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function unwrapDefault<T>(mod: any): T {
+  if (typeof mod === 'function') return mod as T;
+  if (mod && typeof mod.default !== 'undefined') return unwrapDefault<T>(mod.default);
+  for (const key of ['Kuroshiro', 'KuromojiAnalyzer', 'default']) {
+    if (mod && typeof mod[key] === 'function') return mod[key] as T;
+  }
+  throw new Error('could not resolve constructor from dynamic import');
 }
 
 /**

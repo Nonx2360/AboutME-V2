@@ -1,4 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'http';
+import { parseTTMLContent, LRCParser } from '@braccato/parsers';
+import type { Lyric } from '@braccato/types';
 
 let isJapanese: (text: string) => boolean = () => false;
 let getRomaji: (text: string) => Promise<string | null> = async () => null;
@@ -35,23 +37,10 @@ interface UnisonLyricsEntry {
   artist?: string;
 }
 
-type SyncedLyricWord = {
-  timeMs: number;
-  endMs: number;
-  text: string;
-};
-
-type SyncedLyricLine = {
-  timeMs: number;
-  text: string;
-  romaji?: string | null;
-  words?: SyncedLyricWord[];
-};
-
 type LyricsResponse = {
   source: 'unison' | 'betterlyrics' | 'lrclib' | 'none';
   synced: boolean;
-  lines: SyncedLyricLine[];
+  lines: Lyric[];
   hasJapanese?: boolean;
 };
 
@@ -62,124 +51,22 @@ const BETTERLYRICS_BASE = 'https://api.betterlyrics.org';
 
 /* ── LRC Parser ──────────────────────────────────────────────────────── */
 
-function parseLrc(lrc: string): SyncedLyricLine[] {
+/** Braccato's LRC parser also runs its word-timing fixers. */
+function parseLrc(lrc: string, durationMs: number): Lyric[] {
   if (!lrc) return [];
-  const timeRegex = /\[(\d+):(\d+)(?:\.(\d+))?\]/;
-
-  // First pass: extract raw timed lines
-  const raw: { timeMs: number; text: string }[] = [];
-  for (const line of lrc.split('\n')) {
-    const match = timeRegex.exec(line);
-    if (match) {
-      const minutes = parseInt(match[1], 10);
-      const seconds = parseInt(match[2], 10);
-      const msStr = match[3] || '0';
-      const ms = parseInt(msStr.padEnd(3, '0').slice(0, 3), 10);
-      const timeMs = (minutes * 60 + seconds) * 1000 + ms;
-      const text = line.replace(timeRegex, '').trim();
-      if (text) raw.push({ timeMs, text });
-    }
-  }
-  raw.sort((a, b) => a.timeMs - b.timeMs);
-
-  // Second pass: build lines with approximate word timing
-  return raw.map((entry, i) => {
-    const nextStart = i < raw.length - 1 ? raw[i + 1].timeMs : entry.timeMs + 3000;
-    const words = distributeWords(entry.text, entry.timeMs, nextStart);
-    return { timeMs: entry.timeMs, text: entry.text, words };
-  });
-}
-
-function distributeWords(text: string, startMs: number, endMs: number): SyncedLyricWord[] {
-  const parts = text.split(/\s+/).filter(Boolean);
-  if (parts.length <= 1) return [{ timeMs: startMs, endMs, text }];
-
-  const totalChars = parts.reduce((sum, w) => sum + w.length, 0);
-  const duration = endMs - startMs;
-  let cursor = startMs;
-
-  return parts.map((word) => {
-    const wordMs = cursor;
-    const wordEnd = cursor + (word.length / totalChars) * duration;
-    cursor = wordEnd;
-    return { timeMs: wordMs, endMs: wordEnd, text: word };
-  });
+  return LRCParser.parse(lrc, durationMs);
 }
 
 /* ── TTML Parser ─────────────────────────────────────────────────────── */
 
 /**
- * TTML `begin`/`end` values come in three shapes:
- *   "00:00:18.234"  hours:minutes:seconds  (Unison)
- *   "1:16.656"      minutes:seconds         (Unison)
- *   "12.345"        bare seconds            (BetterLyrics)
- * Providers disagree, so all three must be accepted.
+ * Braccato handles every timestamp shape the providers emit (`hh:mm:ss.mmm`,
+ * `m:ss.mmm` and bare seconds), plus background vocals, vocalists,
+ * transliterations and instrumental gaps.
  */
-function parseTtmlTimestamp(ts: string): number {
-  if (!ts) return 0;
-  const m = ts.match(/(?:(\d+):)?(\d+):(\d+(?:\.\d+)?)/);
-  if (m) {
-    const hours = parseInt(m[1] || '0', 10);
-    const minutes = parseInt(m[2], 10);
-    const seconds = parseFloat(m[3]);
-    return (hours * 3600 + minutes * 60 + seconds) * 1000;
-  }
-  const bareSeconds = parseFloat(ts);
-  return Number.isFinite(bareSeconds) ? Math.round(bareSeconds * 1000) : 0;
-}
-
-function parseTtml(xml: string): SyncedLyricLine[] {
-  const lines: SyncedLyricLine[] = [];
-
-  // Try word-level: <p> containing <span begin="..." end="...">word</span>
-  const paraRegex = /<p[^>]*begin="([^"]*)"[^>]*>([\s\S]*?)<\/p>/g;
-  let paraMatch;
-  while ((paraMatch = paraRegex.exec(xml)) !== null) {
-    const pBegin = parseTtmlTimestamp(paraMatch[1]);
-    const pContent = paraMatch[2];
-
-    // Extract words from spans inside this <p> (SLG-style: merge spans without gaps)
-    const wordRegex = /<span[^>]*begin="([^"]*)"[^>]*end="([^"]*)"[^>]*>([\s\S]*?)<\/span>/g;
-    const words: SyncedLyricWord[] = [];
-    let lastEnd = 0;
-    let wMatch;
-    while ((wMatch = wordRegex.exec(pContent)) !== null) {
-      const gap = pContent.slice(lastEnd, wMatch.index);
-      const text = wMatch[3].trim();
-      if (text) {
-        if (words.length > 0 && !/\s/.test(gap)) {
-          // No whitespace between spans — merge into previous word
-          words[words.length - 1].text += text;
-          words[words.length - 1].endMs = parseTtmlTimestamp(wMatch[2]);
-        } else {
-          words.push({ timeMs: parseTtmlTimestamp(wMatch[1]), endMs: parseTtmlTimestamp(wMatch[2]), text });
-        }
-      }
-      lastEnd = wordRegex.lastIndex;
-    }
-
-    const fullText = pContent.replace(/<[^>]+>/g, '').trim();
-    if (!fullText) continue;
-
-    if (words.length > 1) {
-      // Word-level line
-      lines.push({ timeMs: pBegin, text: fullText, words });
-    } else {
-      // Line-level only
-      lines.push({ timeMs: pBegin, text: fullText });
-    }
-  }
-
-  if (lines.length > 0) return lines.sort((a, b) => a.timeMs - b.timeMs);
-
-  // Fallback: plain <p begin="...">text</p> without spans
-  const plainParaRegex = /<p[^>]*begin="([^"]*)"[^>]*>([\s\S]*?)<\/p>/g;
-  while ((paraMatch = plainParaRegex.exec(xml)) !== null) {
-    const text = paraMatch[2].replace(/<[^>]+>/g, '').trim();
-    if (text) lines.push({ timeMs: parseTtmlTimestamp(paraMatch[1]), text });
-  }
-
-  return lines.sort((a, b) => a.timeMs - b.timeMs);
+function parseTtml(xml: string, durationMs: number): Lyric[] {
+  const { lyrics } = parseTTMLContent(xml, { songDurationMs: durationMs });
+  return lyrics;
 }
 
 /* ── Unison ──────────────────────────────────────────────────────────── */
@@ -187,7 +74,8 @@ function parseTtml(xml: string): SyncedLyricLine[] {
 async function fetchFromUnison(
   song: string,
   artist: string,
-  album: string
+  album: string,
+  durationMs: number
 ): Promise<LyricsResponse | null> {
   try {
     const params = new URLSearchParams({ song, artist });
@@ -211,8 +99,8 @@ async function fetchFromUnison(
     if (!entry.lyrics) return null;
 
     const lines =
-      entry.format === 'ttml' ? parseTtml(entry.lyrics) :
-      entry.format === 'lrc'  ? parseLrc(entry.lyrics)  :
+      entry.format === 'ttml' ? parseTtml(entry.lyrics, durationMs) :
+      entry.format === 'lrc'  ? parseLrc(entry.lyrics, durationMs)  :
       [];
 
     if (lines.length === 0) return null;
@@ -272,7 +160,7 @@ async function fetchFromBetterLyrics(
     const body = await res.json() as { ttml?: string };
     if (!body.ttml) return null;
 
-    const lines = parseTtml(body.ttml);
+    const lines = parseTtml(body.ttml, durationSec * 1000);
     if (lines.length === 0) return null;
 
     return { source: 'betterlyrics', synced: true, lines, hasJapanese: false };
@@ -312,7 +200,7 @@ async function fetchFromLrclib(
     const data = (await res.json()) as LrcLibResponse;
     if (!data.syncedLyrics) return null;
 
-    const lines = parseLrc(data.syncedLyrics);
+    const lines = parseLrc(data.syncedLyrics, durationSec * 1000);
     if (lines.length === 0) return null;
 
     return { source: 'lrclib', synced: true, lines, hasJapanese: false };
@@ -325,25 +213,29 @@ async function fetchFromLrclib(
 /* ── Romaji Enrichment ───────────────────────────────────────────────── */
 
 async function enrichWithRomaji(
-  lines: SyncedLyricLine[]
-): Promise<{ enriched: SyncedLyricLine[]; hasJapanese: boolean }> {
+  lines: Lyric[]
+): Promise<{ enriched: Lyric[]; hasJapanese: boolean }> {
   try {
-    const jpLines = lines.filter(l => isJapanese(l.text));
+    // Skip synthetic instrumental lines — they have no text to convert.
+    const jpLines = lines.filter(l => !l.isInstrumental && isJapanese(l.words));
     if (jpLines.length === 0) {
-      return { enriched: lines.map(l => ({ ...l, romaji: null })), hasJapanese: false };
+      return { enriched: lines, hasJapanese: false };
     }
 
     const enriched = await Promise.all(
-      lines.map(async (line) => ({
-        ...line,
-        romaji: await getRomaji(line.text),
-      }))
+      lines.map(async (line) => {
+        if (line.isInstrumental) return line;
+        const romaji = await getRomaji(line.words);
+        // Only fill the gap; a TTML document can already carry a romanization.
+        if (!romaji || line.romanization) return line;
+        return { ...line, romanization: romaji };
+      })
     );
 
     return { enriched, hasJapanese: true };
   } catch (err) {
     console.error('[lyrics] enrichWithRomaji failed:', err);
-    return { enriched: lines.map(l => ({ ...l, romaji: null })), hasJapanese: false };
+    return { enriched: lines, hasJapanese: false };
   }
 }
 
@@ -404,9 +296,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json(cache.get(trackId));
     }
 
+    // Duration in ms drives the parsers' instrumental-gap detection.
+    const totalMs = durationMs ? parseInt(durationMs, 10) || 0 : 0;
+
     // 1. Try Unison TTML first
     const unisonResult = track && artist
-      ? await fetchFromUnison(track, artist, album || '')
+      ? await fetchFromUnison(track, artist, album || '', totalMs)
       : null;
 
     if (unisonResult) {
