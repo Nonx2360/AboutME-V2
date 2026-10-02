@@ -88,11 +88,34 @@ body {
   font-family: var(--font-sans);
 }
 
-/* Romanization lines we append (see attachRomanization) follow the song's
-   opacity so they dim together with the line they translate. */
+/* Scale lyrics to the viewport. clamp() maxes out once the preferred value
+   exceeds it, so the max must stay well below what large screens produce or
+   phones would get the desktop size. Lyric caps at 1.6rem, romaji well under
+   it so a translation never outweighs the line it belongs to. */
+.lyrics-host {
+  --blyrics-font-size: clamp(0.95rem, 0.55rem + 3.6vw, 1.6rem);
+  --blyrics-translated-font-size: clamp(0.62rem, 0.44rem + 1.7vw, 1rem);
+  --blyrics-translated-font-weight: 500;
+}
+
+/* Long unbroken runs (common in Japanese and in unspaced LRC lines) must wrap
+   rather than run off the card. Braccato ships `overflow-wrap: normal`. */
+.lyrics-host .blyrics--line,
+.lyrics-host .blyrics-line-main {
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+/* Romanization lines we append (see attachRomanization) sit under the line they
+   translate and follow its opacity, so the two dim together. */
 .lyrics-host .blyrics--romanized {
+  display: block;
+  margin-top: 0.15em;
+  line-height: 1.25;
+  font-style: italic;
   font-size: var(--blyrics-translated-font-size);
   font-weight: var(--blyrics-translated-font-weight);
+  color: var(--blyrics-translated-color);
 }
 
 @media (prefers-reduced-motion: reduce) {

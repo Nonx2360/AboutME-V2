@@ -48,7 +48,7 @@ const cache = new Map<string, LyricsResponse>();
 const UNISON_BASE = 'https://unison.boidu.dev';
 const BETTERLYRICS_BASE = 'https://api.betterlyrics.org';
 
-/* â”€â”€ LRC Parser â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* -- LRC Parser -------------------------------------------------------- */
 
 /** Braccato's LRC parser also runs its word-timing fixers. */
 function parseLrc(lrc: string, durationMs: number): Lyric[] {
@@ -56,7 +56,7 @@ function parseLrc(lrc: string, durationMs: number): Lyric[] {
   return LRCParser.parse(lrc, durationMs);
 }
 
-/* â”€â”€ TTML Parser â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* -- TTML Parser ------------------------------------------------------- */
 
 /**
  * Braccato handles every timestamp shape the providers emit (`hh:mm:ss.mmm`,
@@ -68,7 +68,7 @@ function parseTtml(xml: string, durationMs: number): Lyric[] {
   return lyrics;
 }
 
-/* â”€â”€ Unison â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* -- Unison ------------------------------------------------------------ */
 
 async function fetchFromUnison(
   song: string,
@@ -115,7 +115,7 @@ async function fetchFromUnison(
   }
 }
 
-/* â”€â”€ BetterLyrics â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* -- BetterLyrics ------------------------------------------------------ */
 
 /**
  * BetterLyrics serves syllable-synced TTML. Access is cache-first: cached
@@ -123,7 +123,7 @@ async function fetchFromUnison(
  * optional API key is supplied (keys are currently not being issued).
  *
  * All four params must be sent because album + duration are part of the
- * remote cache key â€” omitting them causes cache misses, not matches.
+ * remote cache key - omitting them causes cache misses, not matches.
  */
 async function fetchFromBetterLyrics(
   song: string,
@@ -168,7 +168,7 @@ async function fetchFromBetterLyrics(
   }
 }
 
-/* â”€â”€ LRCLIB â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* -- LRCLIB ------------------------------------------------------------ */
 
 async function fetchFromLrclib(
   track: string,
@@ -208,11 +208,11 @@ async function fetchFromLrclib(
   }
 }
 
-/* â”€â”€ Romaji Enrichment â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* -- Romaji Enrichment ------------------------------------------------- */
 
 async function enrichWithRomaji(lines: Lyric[]): Promise<Lyric[]> {
   try {
-    // Skip synthetic instrumental lines â€” they have no text to convert.
+    // Skip synthetic instrumental lines - they have no text to convert.
     const jpLines = lines.filter(l => !l.isInstrumental && isJapanese(l.words));
     if (jpLines.length === 0) return lines;
 
@@ -231,7 +231,7 @@ async function enrichWithRomaji(lines: Lyric[]): Promise<Lyric[]> {
   }
 }
 
-/* â”€â”€ Handler â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* -- Handler ----------------------------------------------------------- */
 
 const EMPTY: LyricsResponse = { source: 'none', synced: false, lines: [] };
 
@@ -302,7 +302,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return respondWith(res, trackId, unisonResult);
     }
 
-    // 2. Fall back to BetterLyrics â€” also TTML, so real word timing is preserved
+    // 2. Fall back to BetterLyrics - also TTML, so real word timing is preserved
     const betterLyricsResult = track && artist
       ? await fetchFromBetterLyrics(track, artist, album || '', durationMs || '')
       : null;

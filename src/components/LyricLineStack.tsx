@@ -1,4 +1,4 @@
-﻿import { useRef, useEffect } from 'react';
+import { useRef, useEffect } from 'react';
 import type { Lyric } from '@braccato/types';
 import type { BraccatoView } from '../types/spotify';
 import '@braccato/core/element';
@@ -44,7 +44,7 @@ function attachRomanization(view: HTMLElement, lines: Lyric[]): void {
 }
 
 /**
- * Renders synced lyrics with the Braccato engine â€” the same renderer behind
+ * Renders synced lyrics with the Braccato engine - the same renderer behind
  * the Better Lyrics browser extension.
  *
  * Braccato owns the DOM, so the clock is written straight onto the element each
@@ -129,16 +129,18 @@ export function LyricLineStack({
         </div>
       )}
 
-      {/* Lyrics area â€” the engine scrolls the active line to centre stage */}
-      <div className="relative z-10 min-h-[200px]">
+      {/* Lyrics area - the engine scrolls the active line to centre stage */}
+      <div className="relative z-10 min-h-[200px] max-h-[260px]">
         <braccato-lyrics
           ref={viewRef}
           className="lyrics-host"
           style={{
             display: 'block',
-            height: 200,
+            // Grows with the lyric instead of clipping a wrapped long line;
+            // Braccato scrolls the active line into view itself.
+            minHeight: 200,
+            maxHeight: 260,
             overflowY: 'auto',
-            '--blyrics-font-size': '1.6rem',
             '--blyrics-lyric-active-color': '#ffffff',
           } as React.CSSProperties}
         />
