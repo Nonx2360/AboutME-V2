@@ -69,12 +69,9 @@ export function useSyncedLyrics(
   const lines = useMemo(() => lyricsData?.lines || [], [lyricsData]);
   const synced = lyricsData?.synced || false;
 
-  const hasJapanese = lyricsData?.hasJapanese ?? false;
-
   return {
     displayProgressMs,
     hasSyncedLyrics: synced && lines.length > 0,
-    hasJapanese,
     loading,
     lines,
     source: lyricsData?.source || 'none',

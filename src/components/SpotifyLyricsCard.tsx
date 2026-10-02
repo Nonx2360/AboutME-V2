@@ -86,7 +86,6 @@ export function SpotifyLyricsCard({ lanyardSpotify }: SpotifyLyricsCardProps) {
   const {
     displayProgressMs: syncedProgressMs,
     hasSyncedLyrics,
-    hasJapanese,
     loading: lyricsLoading,
     source: lyricsSource,
     lines,
@@ -212,7 +211,6 @@ export function SpotifyLyricsCard({ lanyardSpotify }: SpotifyLyricsCardProps) {
             displayProgressMs={syncedProgressMs}
             isPlaying={isPlaying}
             albumArtUrl={track.albumArtUrl}
-            hasJapanese={hasJapanese}
           />
         ) : (
           <div className="flex flex-col items-center justify-center py-10 text-center">

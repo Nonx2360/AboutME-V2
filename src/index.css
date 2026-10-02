@@ -88,9 +88,11 @@ body {
   font-family: var(--font-sans);
 }
 
-/* Romaji toggle is handled in JSX; hide the engine's romanization line when off */
-.lyrics-hide-romanization .blyrics--romanized {
-  display: none;
+/* Romanization lines we append (see attachRomanization) follow the song's
+   opacity so they dim together with the line they translate. */
+.lyrics-host .blyrics--romanized {
+  font-size: var(--blyrics-translated-font-size);
+  font-weight: var(--blyrics-translated-font-weight);
 }
 
 @media (prefers-reduced-motion: reduce) {

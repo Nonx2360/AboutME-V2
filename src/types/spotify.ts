@@ -45,5 +45,4 @@ export type LyricsResponse = {
   source: 'unison' | 'betterlyrics' | 'lrclib' | 'none';
   synced: boolean;
   lines: Lyric[];
-  hasJapanese?: boolean;
 };

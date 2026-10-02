@@ -41,7 +41,6 @@ type LyricsResponse = {
   source: 'unison' | 'betterlyrics' | 'lrclib' | 'none';
   synced: boolean;
   lines: Lyric[];
-  hasJapanese?: boolean;
 };
 
 const cache = new Map<string, LyricsResponse>();
@@ -49,7 +48,7 @@ const cache = new Map<string, LyricsResponse>();
 const UNISON_BASE = 'https://unison.boidu.dev';
 const BETTERLYRICS_BASE = 'https://api.betterlyrics.org';
 
-/* ── LRC Parser ──────────────────────────────────────────────────────── */
+/* â”€â”€ LRC Parser â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 /** Braccato's LRC parser also runs its word-timing fixers. */
 function parseLrc(lrc: string, durationMs: number): Lyric[] {
@@ -57,7 +56,7 @@ function parseLrc(lrc: string, durationMs: number): Lyric[] {
   return LRCParser.parse(lrc, durationMs);
 }
 
-/* ── TTML Parser ─────────────────────────────────────────────────────── */
+/* â”€â”€ TTML Parser â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 /**
  * Braccato handles every timestamp shape the providers emit (`hh:mm:ss.mmm`,
@@ -69,7 +68,7 @@ function parseTtml(xml: string, durationMs: number): Lyric[] {
   return lyrics;
 }
 
-/* ── Unison ──────────────────────────────────────────────────────────── */
+/* â”€â”€ Unison â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 async function fetchFromUnison(
   song: string,
@@ -109,7 +108,6 @@ async function fetchFromUnison(
       source: 'unison',
       synced: true,
       lines,
-      hasJapanese: false,
     };
   } catch (err) {
     console.error('[lyrics] Unison fetch failed:', err);
@@ -117,7 +115,7 @@ async function fetchFromUnison(
   }
 }
 
-/* ── BetterLyrics ────────────────────────────────────────────────────── */
+/* â”€â”€ BetterLyrics â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 /**
  * BetterLyrics serves syllable-synced TTML. Access is cache-first: cached
@@ -125,7 +123,7 @@ async function fetchFromUnison(
  * optional API key is supplied (keys are currently not being issued).
  *
  * All four params must be sent because album + duration are part of the
- * remote cache key — omitting them causes cache misses, not matches.
+ * remote cache key â€” omitting them causes cache misses, not matches.
  */
 async function fetchFromBetterLyrics(
   song: string,
@@ -163,14 +161,14 @@ async function fetchFromBetterLyrics(
     const lines = parseTtml(body.ttml, durationSec * 1000);
     if (lines.length === 0) return null;
 
-    return { source: 'betterlyrics', synced: true, lines, hasJapanese: false };
+    return { source: 'betterlyrics', synced: true, lines };
   } catch (err) {
     console.error('[lyrics] BetterLyrics fetch failed:', err);
     return null;
   }
 }
 
-/* ── LRCLIB ──────────────────────────────────────────────────────────── */
+/* â”€â”€ LRCLIB â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 async function fetchFromLrclib(
   track: string,
@@ -203,26 +201,22 @@ async function fetchFromLrclib(
     const lines = parseLrc(data.syncedLyrics, durationSec * 1000);
     if (lines.length === 0) return null;
 
-    return { source: 'lrclib', synced: true, lines, hasJapanese: false };
+    return { source: 'lrclib', synced: true, lines };
   } catch (err) {
     console.error('[lyrics] LRCLIB fetch failed:', err);
     return null;
   }
 }
 
-/* ── Romaji Enrichment ───────────────────────────────────────────────── */
+/* â”€â”€ Romaji Enrichment â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
-async function enrichWithRomaji(
-  lines: Lyric[]
-): Promise<{ enriched: Lyric[]; hasJapanese: boolean }> {
+async function enrichWithRomaji(lines: Lyric[]): Promise<Lyric[]> {
   try {
-    // Skip synthetic instrumental lines — they have no text to convert.
+    // Skip synthetic instrumental lines â€” they have no text to convert.
     const jpLines = lines.filter(l => !l.isInstrumental && isJapanese(l.words));
-    if (jpLines.length === 0) {
-      return { enriched: lines, hasJapanese: false };
-    }
+    if (jpLines.length === 0) return lines;
 
-    const enriched = await Promise.all(
+    return await Promise.all(
       lines.map(async (line) => {
         if (line.isInstrumental) return line;
         const romaji = await getRomaji(line.words);
@@ -231,17 +225,15 @@ async function enrichWithRomaji(
         return { ...line, romanization: romaji };
       })
     );
-
-    return { enriched, hasJapanese: true };
   } catch (err) {
     console.error('[lyrics] enrichWithRomaji failed:', err);
-    return { enriched: lines, hasJapanese: false };
+    return lines;
   }
 }
 
-/* ── Handler ─────────────────────────────────────────────────────────── */
+/* â”€â”€ Handler â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
-const EMPTY: LyricsResponse = { source: 'none', synced: false, lines: [], hasJapanese: false };
+const EMPTY: LyricsResponse = { source: 'none', synced: false, lines: [] };
 
 /** Enriches with romaji, caches, and writes the response. */
 async function respondWith(
@@ -249,8 +241,10 @@ async function respondWith(
   trackId: string,
   result: LyricsResponse
 ): Promise<LyricsResponse> {
-  const { enriched, hasJapanese } = await enrichWithRomaji(result.lines);
-  const payload: LyricsResponse = { ...result, lines: enriched, hasJapanese };
+  const payload: LyricsResponse = {
+    ...result,
+    lines: await enrichWithRomaji(result.lines),
+  };
   cache.set(trackId, payload);
   res.setHeader('Cache-Control', 'public, max-age=3600, stale-while-revalidate=600');
   res.status(200).json(payload);
@@ -308,7 +302,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return respondWith(res, trackId, unisonResult);
     }
 
-    // 2. Fall back to BetterLyrics — also TTML, so real word timing is preserved
+    // 2. Fall back to BetterLyrics â€” also TTML, so real word timing is preserved
     const betterLyricsResult = track && artist
       ? await fetchFromBetterLyrics(track, artist, album || '', durationMs || '')
       : null;
@@ -331,3 +325,4 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json(EMPTY);
   }
 }
+

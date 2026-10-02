@@ -1,5 +1,4 @@
-import { useRef, useEffect, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+﻿import { useRef, useEffect } from 'react';
 import type { Lyric } from '@braccato/types';
 import type { BraccatoView } from '../types/spotify';
 import '@braccato/core/element';
@@ -12,11 +11,40 @@ interface LyricLineStackProps {
   displayProgressMs: number;
   isPlaying?: boolean;
   albumArtUrl?: string;
-  hasJapanese?: boolean;
 }
 
 /**
- * Renders synced lyrics with the Braccato engine — the same renderer behind
+ * Appends each line's romanization inside Braccato's own line element.
+ *
+ * Braccato's builder only reads `words` and `parts`, so a `romanization` on the
+ * Lyric is ignored entirely. Its public `injectRomanization` needs the internal
+ * LineData records, which the element does not expose, so the text is appended
+ * here using Braccato's published `blyrics--romanized` class — the same hook
+ * its stylesheet themes, so this looks native rather than bolted on.
+ *
+ * Runs after `el.lyrics` is assigned, since assigning rebuilds all the lines.
+ */
+function attachRomanization(view: HTMLElement, lines: Lyric[]): void {
+  view.querySelectorAll('.blyrics--romanized').forEach((el) => el.remove());
+
+  lines.forEach((lyric, index) => {
+    if (!lyric.romanization || lyric.isInstrumental) return;
+    // Braccato stamps each built line with its source array index.
+    const lineEl = view.querySelector<HTMLElement>(
+      `.blyrics--line[data-line-number="${index}"]`
+    );
+    if (!lineEl) return;
+
+    const romanized = view.ownerDocument.createElement('span');
+    romanized.className = 'blyrics--romanized';
+    romanized.lang = 'en-Latn';
+    romanized.textContent = lyric.romanization;
+    lineEl.appendChild(romanized);
+  });
+}
+
+/**
+ * Renders synced lyrics with the Braccato engine â€” the same renderer behind
  * the Better Lyrics browser extension.
  *
  * Braccato owns the DOM, so the clock is written straight onto the element each
@@ -29,9 +57,7 @@ export function LyricLineStack({
   displayProgressMs,
   isPlaying = false,
   albumArtUrl,
-  hasJapanese = false,
 }: LyricLineStackProps) {
-  const [romajiEnabled, setRomajiEnabled] = useState(true);
   const viewRef = useRef<BraccatoView | null>(null);
 
   const progressRef = useRef(displayProgressMs);
@@ -47,7 +73,9 @@ export function LyricLineStack({
   // Parsing happens server-side, so this is just a hand-off of structured data.
   useEffect(() => {
     const el = viewRef.current;
-    if (el) el.lyrics = lines.length > 0 ? lines : null;
+    if (!el) return;
+    el.lyrics = lines.length > 0 ? lines : null;
+    attachRomanization(el, lines);
   }, [lines]);
 
   // Drive the engine clock. Braccato reads seconds; we track milliseconds.
@@ -86,8 +114,6 @@ export function LyricLineStack({
     return () => el.removeEventListener('scroll', noteUserScroll);
   }, []);
 
-  const hasRomanization = lines.some(l => l.romanization);
-
   return (
     <div className="relative w-full select-none rounded-2xl overflow-hidden">
       {/* Blurred album art background */}
@@ -103,11 +129,11 @@ export function LyricLineStack({
         </div>
       )}
 
-      {/* Lyrics area — the engine scrolls the active line to centre stage */}
+      {/* Lyrics area â€” the engine scrolls the active line to centre stage */}
       <div className="relative z-10 min-h-[200px]">
         <braccato-lyrics
           ref={viewRef}
-          className={romajiEnabled ? 'lyrics-host' : 'lyrics-host lyrics-hide-romanization'}
+          className="lyrics-host"
           style={{
             display: 'block',
             height: 200,
@@ -117,30 +143,6 @@ export function LyricLineStack({
           } as React.CSSProperties}
         />
       </div>
-
-      {/* Romaji toggle — Braccato renders the romanization line itself */}
-      <AnimatePresence>
-        {hasJapanese && hasRomanization && (
-          <motion.button
-            key="romaji-toggle"
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 4 }}
-            onClick={() => setRomajiEnabled(v => !v)}
-            aria-pressed={romajiEnabled}
-            aria-label={romajiEnabled ? 'Hide Romaji' : 'Show Romaji'}
-            className="absolute bottom-1 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest transition-all duration-200 cursor-pointer focus-visible:outline-2 focus-visible:outline-accent z-20"
-            style={{
-              background: romajiEnabled ? 'rgba(29,185,84,0.12)' : 'rgba(255,255,255,0.05)',
-              color: romajiEnabled ? '#1db954' : 'rgba(255,255,255,0.22)',
-              border: `1px solid ${romajiEnabled ? 'rgba(29,185,84,0.3)' : 'rgba(255,255,255,0.08)'}`,
-            }}
-          >
-            <span style={{ fontFamily: 'serif', fontSize: '10px' }}>あ</span>
-            {romajiEnabled ? 'Romaji ON' : 'Romaji OFF'}
-          </motion.button>
-        )}
-      </AnimatePresence>
     </div>
   );
 }
